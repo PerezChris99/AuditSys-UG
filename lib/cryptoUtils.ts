@@ -1,8 +1,7 @@
-import { Transaction } from '../types';
 
 // A simple, non-cryptographic hash function for demonstration purposes.
 // In a real application, a proper cryptographic hash like SHA-256 should be used.
-export const calculateHash = (txData: Omit<Transaction, 'hash' | 'previousHash'>): string => {
+export const calculateHash = (txData: any): string => {
     const dataString = `${txData.id}${txData.timestamp}${txData.type}${txData.amount}${txData.associatedRecordId}${txData.agentId}`;
     let hash = 0;
     for (let i = 0; i < dataString.length; i++) {

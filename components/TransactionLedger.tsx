@@ -1,14 +1,13 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Transaction } from '../types';
 import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon } from './ui/Icons';
-import { calculateHash } from '../lib/cryptoUtils';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 const TransactionLedger: React.FC = () => {
-  const { transactions: originalTransactions, agents: mockAgents } = useData();
-  const [transactions, setTransactions] = useState(originalTransactions);
+  const { transactions: originalTransactions, agents: mockAgents, setTransactions } = useData();
   const [filterType, setFilterType] = useState<string>('All');
   const [filterAgent, setFilterAgent] = useState<string>('All');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
@@ -19,9 +18,6 @@ const TransactionLedger: React.FC = () => {
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
 
   useEffect(() => {
-    // On component mount or when URL search parameters change, check for an agentId.
-    // If a valid agentId is present, pre-filter the ledger for that agent.
-    // This enables deep-linking from other parts of the application, like the Agent Performance page.
     const agentIdFromUrl = searchParams.get('agentId');
     if (agentIdFromUrl && mockAgents.some(agent => agent.id === agentIdFromUrl)) {
       setFilterAgent(agentIdFromUrl);
@@ -29,73 +25,66 @@ const TransactionLedger: React.FC = () => {
   }, [searchParams, mockAgents]);
 
   useEffect(() => {
-    setTransactions(originalTransactions);
+    // Reset verification status when data changes
     setVerificationStatus('idle');
     setTamperedTxId(null);
   }, [originalTransactions]);
 
-  const transactionTypes = useMemo(() => ['All', ...Array.from(new Set(transactions.map(tx => tx.type)))], [transactions]);
+  const transactionTypes = useMemo(() => ['All', ...Array.from(new Set(originalTransactions.map(tx => tx.type)))], [originalTransactions]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(tx => {
+    return originalTransactions.filter(tx => {
       if (filterType !== 'All' && tx.type !== filterType) return false;
       if (filterAgent !== 'All' && tx.agentId !== filterAgent) return false;
       const txDate = new Date(tx.timestamp);
       if (filterStartDate && new Date(filterStartDate) > txDate) return false;
       if (filterEndDate) {
         const endDate = new Date(filterEndDate);
-        endDate.setHours(23, 59, 59, 999);
+endDate.setHours(23, 59, 59, 999);
         if (endDate < txDate) return false;
       }
       return true;
     });
-  }, [filterType, filterAgent, filterStartDate, filterEndDate, transactions]);
+  }, [filterType, filterAgent, filterStartDate, filterEndDate, originalTransactions]);
 
-  const handleVerifyChain = () => {
+  const handleVerifyChain = async () => {
     setVerificationStatus('verifying');
     setTamperedTxId(null);
-    const chain = filteredTransactions.slice().reverse(); // Check from oldest to newest
-    let isValid = true;
-    let previousTxHash = '0'.repeat(16);
-
-    setTimeout(() => { // Simulate verification time
-      for (const tx of chain) {
-        if (tx.previousHash !== previousTxHash) {
-          isValid = false;
-          setTamperedTxId(tx.id);
-          break;
+    try {
+        const response = await fetch(`${API_BASE_URL}/ledger/verify`, { method: 'POST' });
+        if (response.ok) {
+            setVerificationStatus('verified');
+        } else {
+            const errorData = await response.json();
+            setTamperedTxId(errorData.tamperedTxId);
+            setVerificationStatus('failed');
         }
-        const { hash, previousHash: _, ...txData } = tx;
-        const calculated = calculateHash(txData);
-        if (calculated !== hash) {
-          isValid = false;
-          setTamperedTxId(tx.id);
-          break;
-        }
-        previousTxHash = hash;
-      }
-      setVerificationStatus(isValid ? 'verified' : 'failed');
-    }, 1000);
+    } catch (error) {
+        console.error("Verification failed:", error);
+        setVerificationStatus('failed');
+        alert("A network error occurred during verification. Please check your connection to the backend server.");
+    }
   };
 
-  const handleTamperData = () => {
-    if (transactions.length > 5) {
-      const tamperedIndex = Math.floor(transactions.length / 2);
-      const tamperedTx = { ...transactions[tamperedIndex], amount: transactions[tamperedIndex].amount + 150.75 };
-      const newTransactions = [...transactions];
-      newTransactions[tamperedIndex] = tamperedTx;
-
-      setTransactions(newTransactions);
-      setTamperedTxId(tamperedTx.id);
-      setVerificationStatus('failed');
-      alert(`Data Tampered: Transaction ${tamperedTx.id} amount was changed, but its hash was not recalculated. The chain is now broken. Try verifying again to detect the inconsistency.`);
-    } else {
-      alert("Not enough data to tamper with.");
+  const handleTamperData = async () => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/ledger/tamper`, { method: 'POST' });
+        const data = await response.json();
+        if (response.ok) {
+            setTransactions(data.transactions); // Update frontend state with tampered data
+            setTamperedTxId(data.tamperedTxId);
+            setVerificationStatus('failed');
+            alert(`Data Tampered: Transaction ${data.tamperedTxId} amount was changed. The chain is now broken. Try verifying again.`);
+        } else {
+            alert(`Failed to tamper data: ${data.error || 'An unknown error occurred.'}`);
+        }
+    } catch (error) {
+        console.error("Tampering failed:", error);
+        alert("A network error occurred while trying to tamper data. Please check the backend connection.");
     }
   };
 
   const renderDetails = (tx: Transaction) => {
-    // Display 'Ticket Sale:' for sales, and 'Type:' for all other transaction types for clarity.
     const label = tx.type === 'Sale' ? 'Ticket Sale:' : `${tx.type}:`;
     return (
       <div className="font-sans">
@@ -186,7 +175,7 @@ const TransactionLedger: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-gray-700 text-right font-sans">${tx.amount.toFixed(2)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-green-600">{tx.hash}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 flex items-center">
-                  {index < transactions.length - 1 && tx.previousHash !== '0'.repeat(16) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
+                  {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(16) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
                   {tx.previousHash}
                 </td>
               </tr>

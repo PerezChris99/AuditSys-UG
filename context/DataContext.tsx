@@ -1,76 +1,110 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Agent, Ticket, Transaction, Discrepancy } from '../types';
-import { mockAgents, mockTickets, mockTransactions, mockDiscrepancies } from '../lib/mockData';
-import { generateNewLiveData } from '../lib/dataGenerator';
 import { useNotifications } from './NotificationContext';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 interface DataContextType {
   agents: Agent[];
   tickets: Ticket[];
   transactions: Transaction[];
   discrepancies: Discrepancy[];
+  isLoading: boolean;
+  error: string | null;
+  setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [agents] = useState<Agent[]>(mockAgents);
-  const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
-  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>(mockDiscrepancies);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const { addNotification } = useNotifications();
 
-  const ticketsRef = useRef(tickets);
-  const transactionsRef = useRef(transactions);
-  const discrepanciesRef = useRef(discrepancies);
-
-  useEffect(() => {
-    ticketsRef.current = tickets;
-  }, [tickets]);
-
-  useEffect(() => {
-    transactionsRef.current = transactions;
-  }, [transactions]);
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/data`);
+      if (!response.ok) {
+        let errorMsg = `The server responded with status: ${response.status}`;
+        try {
+            const errorJson = await response.json();
+            if (errorJson && errorJson.error) {
+                errorMsg = errorJson.error;
+            }
+        } catch (e) {
+            // The error response wasn't JSON, use status text as a fallback
+            errorMsg = response.statusText || errorMsg;
+        }
+        throw new Error(errorMsg);
+      }
+      const data = await response.json();
+      setAgents(data.agents);
+      setTickets(data.tickets);
+      setTransactions(data.transactions);
+      setDiscrepancies(data.discrepancies);
+    } catch (e: any) {
+      setError(`Failed to connect to the auditing system. Please ensure the backend server is running and accessible. Details: ${e.message}`);
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
   
   useEffect(() => {
-    discrepanciesRef.current = discrepancies;
-  }, [discrepancies]);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const { newTicket, newTransaction, newDiscrepancy } = generateNewLiveData(
-        agents,
-        ticketsRef.current,
-        transactionsRef.current,
-        discrepanciesRef.current.length
-      );
-      
-      setTickets(prev => [newTicket, ...prev]);
-      setTransactions(prev => [newTransaction, ...prev]);
-      
-      if (newDiscrepancy) {
-        setDiscrepancies(prev => [newDiscrepancy, ...prev]);
-        addNotification({
-          message: `New high-priority discrepancy #${newDiscrepancy.id} flagged.`,
-          type: 'Discrepancy',
-          link: '/discrepancies',
-        });
-      }
-      
-      if (newTransaction.amount > 1000) {
-        addNotification({
-          message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
-          type: 'Transaction Anomaly',
-          link: '/ledger',
-        });
-      }
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/poll`);
+        if (!response.ok) {
+          console.error(`Polling failed with status: ${response.status}`);
+          return;
+        }
+        const newData = await response.json();
 
+        if (newData.tickets.length > 0) {
+          setTickets(prev => [...newData.tickets, ...prev]);
+        }
+        if (newData.transactions.length > 0) {
+          setTransactions(prev => [...newData.transactions, ...prev]);
+           newData.transactions.forEach((tx: Transaction) => {
+            if (tx.amount > 1000) {
+              addNotification({
+                message: `Significant transaction #${tx.id} for $${tx.amount.toFixed(2)}.`,
+                type: 'Transaction Anomaly',
+                link: '/ledger',
+              });
+            }
+          });
+        }
+        if (newData.discrepancies.length > 0) {
+          setDiscrepancies(prev => [...newData.discrepancies, ...prev]);
+          newData.discrepancies.forEach((d: Discrepancy) => {
+            addNotification({
+                message: `New high-priority discrepancy #${d.id} flagged.`,
+                type: 'Discrepancy',
+                link: '/discrepancies',
+            });
+          });
+        }
+        
+      } catch (e) {
+        // Silently fail on poll error to avoid console spam if server is down
+      }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [agents, addNotification]);
+  }, [addNotification]);
 
-  const value = { agents, tickets, transactions, discrepancies };
+
+  const value = { agents, tickets, transactions, discrepancies, isLoading, error, setTransactions };
 
   return (
     <DataContext.Provider value={value}>
