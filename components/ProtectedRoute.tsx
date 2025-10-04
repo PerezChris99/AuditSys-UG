@@ -9,9 +9,13 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { role } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  if (!allowedRoles.includes(role)) {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (!user || !allowedRoles.includes(user.role)) {
     // Redirect them to the home page if they don't have access
     return <Navigate to="/" replace />;
   }

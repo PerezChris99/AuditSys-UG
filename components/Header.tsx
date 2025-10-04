@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { Role } from '../types';
 
 const Header: React.FC = () => {
   const location = useLocation();
-  const { user, setRole } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const { notifications, unreadCount, markAllAsRead } = useNotifications();
   const [isNotificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
-  const [isRoleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   
   const notificationDropdownRef = useRef<HTMLDivElement>(null);
-  const roleDropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
 
   const getTitle = () => {
@@ -30,14 +31,19 @@ const Header: React.FC = () => {
   const handleMarkAllRead = () => {
     markAllAsRead();
   };
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target as Node)) {
         setNotificationDropdownOpen(false);
       }
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setRoleDropdownOpen(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -60,8 +66,6 @@ const Header: React.FC = () => {
     if (interval > 1) return Math.floor(interval) + " minutes ago";
     return Math.floor(seconds) + " seconds ago";
   };
-
-  const availableRoles: Role[] = ['Administrator', 'Auditor', 'Finance Officer', 'Agent', 'Viewer'];
 
   return (
     <header className="h-20 bg-white shadow-sm flex items-center justify-between px-6 z-10">
@@ -121,10 +125,10 @@ const Header: React.FC = () => {
           )}
         </div>
         {user && (
-          <div className="ml-4 flex items-center" ref={roleDropdownRef}>
+          <div className="ml-4 flex items-center" ref={userMenuRef}>
              <div className="relative">
                 <button
-                    onClick={() => setRoleDropdownOpen(!isRoleDropdownOpen)}
+                    onClick={() => setUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center p-2 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                     <img className="h-8 w-8 rounded-full object-cover" src={user.agent?.avatarUrl || `https://i.pravatar.cc/100?u=${user.username}`} alt="User" />
@@ -136,18 +140,15 @@ const Header: React.FC = () => {
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                 </button>
-                {isRoleDropdownOpen && (
+                {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border">
                         <div className="py-1">
-                            {availableRoles.map(role => (
-                                <button
-                                    key={role}
-                                    onClick={() => { setRole(role); setRoleDropdownOpen(false); }}
-                                    className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                    Switch to {role}
-                                </button>
-                            ))}
+                            <button
+                                onClick={handleLogout}
+                                className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                                Sign out
+                            </button>
                         </div>
                     </div>
                 )}
