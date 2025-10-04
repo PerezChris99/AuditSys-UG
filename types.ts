@@ -54,7 +54,14 @@ export interface Discrepancy {
   status: DiscrepancyStatus;
 }
 
-export type Role = 'Administrator' | 'Viewer';
+export type Role = 'Administrator' | 'Viewer' | 'Auditor' | 'Finance Officer' | 'Agent';
+
+export interface User {
+  id: string;
+  username: string;
+  role: Role;
+  agent?: Agent;
+}
 
 export interface Notification {
   id: string;

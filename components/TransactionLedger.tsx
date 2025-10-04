@@ -3,11 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Transaction } from '../types';
 import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon } from './ui/Icons';
+import { useAuth } from '../context/AuthContext';
+import { calculateHash } from '../lib/cryptoUtils';
 
-const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 const TransactionLedger: React.FC = () => {
   const { transactions: originalTransactions, agents: mockAgents, setTransactions } = useData();
+  const { user } = useAuth();
   const [filterType, setFilterType] = useState<string>('All');
   const [filterAgent, setFilterAgent] = useState<string>('All');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
@@ -17,7 +19,11 @@ const TransactionLedger: React.FC = () => {
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
 
+  const canVerify = user?.role === 'Administrator' || user?.role === 'Auditor';
+  const canTamper = user?.role === 'Administrator';
+
   useEffect(() => {
+    // This deep-linking allows navigating from Agent Performance to a pre-filtered ledger
     const agentIdFromUrl = searchParams.get('agentId');
     if (agentIdFromUrl && mockAgents.some(agent => agent.id === agentIdFromUrl)) {
       setFilterAgent(agentIdFromUrl);
@@ -40,48 +46,60 @@ const TransactionLedger: React.FC = () => {
       if (filterStartDate && new Date(filterStartDate) > txDate) return false;
       if (filterEndDate) {
         const endDate = new Date(filterEndDate);
-endDate.setHours(23, 59, 59, 999);
+        endDate.setHours(23, 59, 59, 999);
         if (endDate < txDate) return false;
       }
       return true;
     });
   }, [filterType, filterAgent, filterStartDate, filterEndDate, originalTransactions]);
 
+
   const handleVerifyChain = async () => {
     setVerificationStatus('verifying');
     setTamperedTxId(null);
-    try {
-        const response = await fetch(`${API_BASE_URL}/ledger/verify`, { method: 'POST' });
-        if (response.ok) {
-            setVerificationStatus('verified');
-        } else {
-            const errorData = await response.json();
-            setTamperedTxId(errorData.tamperedTxId);
-            setVerificationStatus('failed');
+    
+    // Simulate network delay
+    await new Promise(res => setTimeout(res, 500));
+    
+    let isChainValid = true;
+    for (let i = 0; i < originalTransactions.length; i++) {
+        const tx = originalTransactions[i];
+        const previousTx = originalTransactions[i + 1]; // sorted newest to oldest
+
+        const expectedHash = await calculateHash(tx.id, tx.timestamp, tx.amount, tx.associatedRecordId, tx.previousHash);
+        if (tx.hash !== expectedHash) {
+            isChainValid = false;
+            setTamperedTxId(tx.id);
+            break;
         }
-    } catch (error) {
-        console.error("Verification failed:", error);
-        setVerificationStatus('failed');
-        alert("A network error occurred during verification. Please check your connection to the backend server.");
+
+        if (previousTx && tx.previousHash !== previousTx.hash) {
+            isChainValid = false;
+            setTamperedTxId(tx.id);
+            break;
+        }
     }
+
+    setVerificationStatus(isChainValid ? 'verified' : 'failed');
   };
 
-  const handleTamperData = async () => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/ledger/tamper`, { method: 'POST' });
-        const data = await response.json();
-        if (response.ok) {
-            setTransactions(data.transactions); // Update frontend state with tampered data
-            setTamperedTxId(data.tamperedTxId);
-            setVerificationStatus('failed');
-            alert(`Data Tampered: Transaction ${data.tamperedTxId} amount was changed. The chain is now broken. Try verifying again.`);
-        } else {
-            alert(`Failed to tamper data: ${data.error || 'An unknown error occurred.'}`);
-        }
-    } catch (error) {
-        console.error("Tampering failed:", error);
-        alert("A network error occurred while trying to tamper data. Please check the backend connection.");
-    }
+  const handleTamperData = () => {
+    if (originalTransactions.length === 0) return;
+    
+    const randomIndex = Math.floor(Math.random() * originalTransactions.length);
+    const tamperedTx = { ...originalTransactions[randomIndex] };
+    
+    // Modify the amount but keep the hash the same
+    tamperedTx.amount += 100;
+    
+    const newTransactions = [...originalTransactions];
+    newTransactions[randomIndex] = tamperedTx;
+    
+    setTransactions(newTransactions);
+    setTamperedTxId(tamperedTx.id);
+    setVerificationStatus('failed');
+
+    alert(`Data Tampered: Transaction ${tamperedTx.id} amount was changed. The chain is now broken. Try verifying again.`);
   };
 
   const renderDetails = (tx: Transaction) => {
@@ -116,14 +134,18 @@ endDate.setHours(23, 59, 59, 999);
       
       <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
-          <button onClick={handleVerifyChain} disabled={verificationStatus === 'verifying'} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 disabled:bg-primary-300 flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            <ShieldExclamationIcon className="h-5 w-5 mr-2" />
-            Verify Ledger Integrity
-          </button>
-          <button onClick={handleTamperData} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-            <TamperIcon className="h-5 w-5 mr-2" />
-            Tamper with Data (Demo)
-          </button>
+          {canVerify && (
+            <button onClick={handleVerifyChain} disabled={verificationStatus === 'verifying'} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 disabled:bg-primary-300 flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+              <ShieldExclamationIcon className="h-5 w-5 mr-2" />
+              Verify Ledger Integrity
+            </button>
+          )}
+          {canTamper && (
+            <button onClick={handleTamperData} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+              <TamperIcon className="h-5 w-5 mr-2" />
+              Tamper with Data (Demo)
+            </button>
+          )}
         </div>
         <VerificationStatus />
       </div>
@@ -173,10 +195,10 @@ endDate.setHours(23, 59, 59, 999);
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-sans">{tx.type}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{renderDetails(tx)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-700 text-right font-sans">${tx.amount.toFixed(2)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-green-600">{tx.hash}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-green-600">{tx.hash.substring(0, 16)}...</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 flex items-center">
-                  {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(16) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
-                  {tx.previousHash}
+                  {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(64) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
+                  {tx.previousHash.substring(0, 16)}...
                 </td>
               </tr>
             ))}

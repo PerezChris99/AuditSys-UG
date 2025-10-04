@@ -6,10 +6,14 @@ import { Role } from '../types';
 
 const Header: React.FC = () => {
   const location = useLocation();
-  const { role, setRole } = useAuth();
+  const { user, setRole } = useAuth();
   const { notifications, unreadCount, markAllAsRead } = useNotifications();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isNotificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
+  const [isRoleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  
+  const notificationDropdownRef = useRef<HTMLDivElement>(null);
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
+
 
   const getTitle = () => {
     switch (location.pathname) {
@@ -29,8 +33,11 @@ const Header: React.FC = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target as Node)) {
+        setNotificationDropdownOpen(false);
+      }
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
+        setRoleDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -54,6 +61,8 @@ const Header: React.FC = () => {
     return Math.floor(seconds) + " seconds ago";
   };
 
+  const availableRoles: Role[] = ['Administrator', 'Auditor', 'Finance Officer', 'Agent', 'Viewer'];
+
   return (
     <header className="h-20 bg-white shadow-sm flex items-center justify-between px-6 z-10">
       <div className="flex items-center">
@@ -67,9 +76,9 @@ const Header: React.FC = () => {
         </div>
       </div>
       <div className="flex items-center">
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative" ref={notificationDropdownRef}>
           <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            onClick={() => setNotificationDropdownOpen(!isNotificationDropdownOpen)}
             className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
             aria-label="Toggle notifications"
           >
@@ -82,7 +91,7 @@ const Header: React.FC = () => {
               </span>
             )}
           </button>
-          {isDropdownOpen && (
+          {isNotificationDropdownOpen && (
             <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg overflow-hidden z-20 border">
               <div className="py-2 px-4 flex justify-between items-center border-b">
                 <h4 className="text-gray-700 font-bold">Notifications</h4>
@@ -97,7 +106,7 @@ const Header: React.FC = () => {
                   <Link 
                     to={notif.link} 
                     key={notif.id} 
-                    onClick={() => setIsDropdownOpen(false)} 
+                    onClick={() => setNotificationDropdownOpen(false)} 
                     className={`block p-4 hover:bg-gray-50 ${!notif.isRead ? 'bg-primary-50' : ''}`}
                   >
                     <p className={`text-sm font-semibold ${notif.type === 'Discrepancy' ? 'text-red-600' : 'text-amber-600'}`}>{notif.type}</p>
@@ -111,26 +120,40 @@ const Header: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="ml-4 flex items-center">
-          <img className="h-10 w-10 rounded-full object-cover" src="https://i.pravatar.cc/100?u=admin" alt="User" />
-          <div className="ml-3">
-            <p className="text-sm font-medium text-gray-700">System Auditor</p>
-            <p className="text-xs text-gray-500 capitalize">{role}</p>
+        {user && (
+          <div className="ml-4 flex items-center" ref={roleDropdownRef}>
+             <div className="relative">
+                <button
+                    onClick={() => setRoleDropdownOpen(!isRoleDropdownOpen)}
+                    className="flex items-center p-2 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                    <img className="h-8 w-8 rounded-full object-cover" src={user.agent?.avatarUrl || `https://i.pravatar.cc/100?u=${user.username}`} alt="User" />
+                    <div className="ml-3 text-left">
+                        <p className="text-sm font-medium text-gray-700">{user.agent?.name || user.username}</p>
+                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                    </div>
+                     <svg className="ml-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
+                {isRoleDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border">
+                        <div className="py-1">
+                            {availableRoles.map(role => (
+                                <button
+                                    key={role}
+                                    onClick={() => { setRole(role); setRoleDropdownOpen(false); }}
+                                    className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                    Switch to {role}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+             </div>
           </div>
-        </div>
-        <div className="ml-6">
-          <label htmlFor="role-switcher" className="text-xs text-gray-500 mb-1 block">Switch Role (Demo)</label>
-          <select
-            id="role-switcher"
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white"
-            aria-label="Switch user role"
-          >
-            <option value="Administrator">Administrator</option>
-            <option value="Viewer">Viewer</option>
-          </select>
-        </div>
+        )}
       </div>
     </header>
   );

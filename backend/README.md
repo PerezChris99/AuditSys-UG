@@ -1,6 +1,6 @@
 # Transparent Revenue & Ticketing Audit System - Backend
 
-This directory contains the Python Flask backend that powers the AuditSys UG application. It provides a RESTful API for the frontend, manages the SQLite database, and handles all business logic, including transaction validation and report generation.
+This directory contains the Python Flask backend that powers the AuditSys UG application. It provides a RESTful API for the frontend, manages the SQLite database, handles user authentication with JWT, and implements all business logic, including transaction validation and report generation.
 
 ---
 
@@ -39,13 +39,24 @@ Follow these instructions to set up and run the backend server on your local mac
     ```
 
 4.  **Initialize the Database**
-    The first time you run the application, you need to create the database file and populate it with initial data using the seed script.
+    The first time you run the application, you need to create the database file and populate it with initial data and user accounts using the seed script.
     ```bash
     python seed.py
     ```
-    This command will create a `database.db` file in the current directory.
+    This command will create a `database.db` file and a `.env` file in the current directory.
     
     > **Note:** To reset the database to its initial state at any time, simply delete the `database.db` file and run the `seed.py` script again.
+
+### Default User Accounts
+
+The `seed.py` script creates two default users for testing:
+
+-   **Administrator:**
+    -   **Username:** `admin`
+    -   **Password:** `adminpassword`
+-   **Viewer:**
+    -   **Username:** `viewer`
+    -   **Password:** `viewerpassword`
 
 ### Running the Server
 
