@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
@@ -18,6 +19,9 @@ const TransactionLedger: React.FC = () => {
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
 
   useEffect(() => {
+    // On component mount or when URL search parameters change, check for an agentId.
+    // If a valid agentId is present, pre-filter the ledger for that agent.
+    // This enables deep-linking from other parts of the application, like the Agent Performance page.
     const agentIdFromUrl = searchParams.get('agentId');
     if (agentIdFromUrl && mockAgents.some(agent => agent.id === agentIdFromUrl)) {
       setFilterAgent(agentIdFromUrl);
@@ -91,10 +95,12 @@ const TransactionLedger: React.FC = () => {
   };
 
   const renderDetails = (tx: Transaction) => {
+    // Display 'Ticket Sale:' for sales, and 'Type:' for all other transaction types for clarity.
+    const label = tx.type === 'Sale' ? 'Ticket Sale:' : `${tx.type}:`;
     return (
       <div className="font-sans">
         <span className="font-semibold text-gray-800">
-          {tx.type === 'Sale' ? 'Ticket Sale:' : tx.type}
+          {label}
         </span>
         <span className="text-gray-500 ml-2">{tx.associatedRecordId}</span>
       </div>
