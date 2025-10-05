@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -21,7 +22,7 @@ const Reports: React.FC = () => {
     end: today,
   });
 
-  const canSeeAgentReports = user?.role === 'Administrator' || user?.role === 'Auditor';
+  const canSeeAgentReports = user?.role === 'Administrator' || user?.role === 'Auditor' || user?.role === 'Viewer';
 
   const transactionTypes = useMemo(() => ['All', ...Array.from(new Set(transactions.map(tx => tx.type)))], [transactions]);
 

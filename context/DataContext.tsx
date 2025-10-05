@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 // FIX: Import DiscrepancyStatus to fix type error.
 import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus } from '../types';
@@ -5,6 +6,7 @@ import { useNotifications } from './NotificationContext';
 import { useAuth } from './AuthContext';
 import { generateInitialData } from '../lib/mockData';
 import { generateNewTicket, generateNewTransaction } from '../lib/dataGenerator';
+import { useSettings } from './SettingsContext';
 
 interface DataContextType {
   agents: Agent[];
@@ -30,6 +32,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>(initialDiscrepancies);
   const { addNotification } = useNotifications();
   const { user } = useAuth();
+  const { settings } = useSettings();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -43,7 +46,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setTransactions(prev => [newTransaction, ...prev]);
 
         // FIX: All properties are now accessible on the resolved transaction object.
-        if (newTransaction.amount > 1000) {
+        if (newTransaction.amount > settings.transactionThreshold) {
             addNotification({
               message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
               type: 'Transaction Anomaly',
@@ -70,10 +73,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         }
       })();
-    }, 5000);
+    }, settings.simulationInterval);
 
     return () => clearInterval(interval);
-  }, [addNotification, agents, transactions]);
+  }, [addNotification, agents, transactions, settings.simulationInterval, settings.transactionThreshold]);
 
   // Filter data based on user role
   const getFilteredData = useCallback(() => {

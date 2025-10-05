@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { Role } from '../types';
+import { UserIcon, LogoutIcon } from './ui/Icons';
 
 const Header: React.FC = () => {
   const location = useLocation();
@@ -19,11 +21,14 @@ const Header: React.FC = () => {
   const getTitle = () => {
     switch (location.pathname) {
       case '/': return 'Dashboard Overview';
+      case '/profile': return 'User Profile';
       case '/tickets': return 'Real-Time Ticket Sales';
       case '/agents': return 'Agent Performance Monitoring';
       case '/discrepancies': return 'Automated Discrepancy Flagging';
       case '/reports': return 'Generate Reports';
       case '/ledger': return 'Immutable Transaction Ledger';
+      case '/admin/users': return 'Manage Users';
+      case '/admin/settings': return 'System Settings';
       default: return 'Dashboard';
     }
   };
@@ -142,11 +147,20 @@ const Header: React.FC = () => {
                 </button>
                 {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border">
-                        <div className="py-1">
+                        <div className="py-1 divide-y divide-gray-100">
+                           <Link
+                                to="/profile"
+                                onClick={() => setUserMenuOpen(false)}
+                                className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                                <UserIcon className="h-5 w-5 mr-3 text-gray-400" />
+                                My Profile
+                            </Link>
                             <button
                                 onClick={handleLogout}
-                                className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             >
+                                <LogoutIcon className="h-5 w-5 mr-3 text-gray-400" />
                                 Sign out
                             </button>
                         </div>

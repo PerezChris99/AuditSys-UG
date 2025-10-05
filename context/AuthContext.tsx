@@ -1,34 +1,45 @@
+
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { User, Role, Agent } from '../types';
 import { generateInitialData } from '../lib/mockData';
 
+// This internal type includes the password, which should not be exposed to the rest of the app.
+type UserWithPassword = User & { password?: string };
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  users: User[]; // Expose all users for the admin panel
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  addUser: (userData: Omit<User, 'id'> & { password?: string }) => void;
+  updateUser: (userId: string, userData: Partial<Omit<User, 'id'>>) => void;
+  deleteUser: (userId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Get the initial agents from mock data to associate with users
 const { agents } = generateInitialData();
 const agentUserAgent = agents.find(a => a.id === 'UA-AG-001');
 
-const mockUsers: Record<string, Omit<User, 'role'> & {password: string, role: Role}> = {
-    admin: { id: 'user-admin', username: 'admin', password: 'password', role: 'Administrator' },
-    agent: { id: 'user-agent1', username: 'agent', password: 'password', role: 'Agent', agent: agentUserAgent },
-};
+const initialUsers: UserWithPassword[] = [
+    { id: 'user-admin', username: 'admin', password: 'password', role: 'Administrator' },
+    { id: 'user-agent1', username: 'agent', password: 'password', role: 'Agent', agent: agentUserAgent },
+    { id: 'user-viewer', username: 'viewer', password: 'password', role: 'Viewer' },
+    { id: 'user-finance', username: 'finance', password: 'password', role: 'Finance Officer' },
+    { id: 'user-auditor', username: 'auditor', password: 'password', role: 'Auditor' },
+];
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<UserWithPassword[]>(initialUsers);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem('auditSysUser');
       if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        setCurrentUser(JSON.parse(storedUser));
       }
     } catch (error) {
       console.error("Failed to parse user from localStorage", error);
@@ -38,44 +49,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = useCallback(async (username: string, password: string): Promise<void> => {
-    // In a real app, this would be an API call:
-    // const response = await fetch('http://127.0.0.1:5000/api/login', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ username, password })
-    // });
-    // if (!response.ok) throw new Error('Login failed');
-    // const { user, token } = await response.json();
-    // localStorage.setItem('auditSysToken', token);
-
-    // Mocking the API call for now
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        const potentialUser = mockUsers[username.toLowerCase()];
+        const potentialUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (potentialUser && potentialUser.password === password) {
             const { password, ...userToStore } = potentialUser;
             localStorage.setItem('auditSysUser', JSON.stringify(userToStore));
-            setUser(userToStore);
+            setCurrentUser(userToStore);
             resolve();
         } else {
             reject(new Error('Invalid credentials'));
         }
       }, 500);
     });
-  }, []);
+  }, [users]);
 
   const logout = useCallback(() => {
-    setUser(null);
+    setCurrentUser(null);
     localStorage.removeItem('auditSysUser');
-    // In a real app with tokens:
-    // localStorage.removeItem('auditSysToken');
   }, []);
 
+  const addUser = useCallback((userData: Omit<User, 'id'> & { password?: string }) => {
+      const newUser: UserWithPassword = {
+          id: `user-${Date.now()}`,
+          ...userData,
+      };
+      setUsers(prev => [...prev, newUser]);
+  }, []);
+
+  const updateUser = useCallback((userId: string, userData: Partial<Omit<User, 'id'>>) => {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...userData } : u));
+  }, []);
+
+  const deleteUser = useCallback((userId: string) => {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+  }, []);
+
+  const publicUsers = useMemo(() => {
+      return users.map(u => {
+          const { password, ...publicUser } = u;
+          return publicUser;
+      });
+  }, [users]);
+
   const value = { 
-    user, 
-    isAuthenticated: !!user,
+    user: currentUser, 
+    isAuthenticated: !!currentUser,
+    users: publicUsers,
     login,
     logout,
+    addUser,
+    updateUser,
+    deleteUser,
   };
 
   return (

@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { UgandanFlagIcon, DashboardIcon, TicketIcon, AgentIcon, AlertIcon, LedgerIcon, ReportsIcon } from './ui/Icons';
+import { UgandanFlagIcon, DashboardIcon, TicketIcon, AgentIcon, AlertIcon, LedgerIcon, ReportsIcon, UsersIcon, SettingsIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 
@@ -42,7 +43,7 @@ const Sidebar: React.FC = () => {
               Discrepancies
             </NavLink>
         )}
-        {hasAccess(['Administrator', 'Auditor', 'Finance Officer']) && (
+        {hasAccess(['Administrator', 'Auditor', 'Finance Officer', 'Viewer']) && (
             <NavLink to="/reports" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
               <ReportsIcon className="h-5 w-5 mr-3" />
               Reports
@@ -53,6 +54,22 @@ const Sidebar: React.FC = () => {
               <LedgerIcon className="h-5 w-5 mr-3" />
               Transaction Ledger
             </NavLink>
+        )}
+
+        {hasAccess(['Administrator']) && (
+          <div className="pt-4 mt-4 border-t border-primary-800">
+            <h3 className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Administration</h3>
+            <div className="mt-2 space-y-2">
+                <NavLink to="/admin/users" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <UsersIcon className="h-5 w-5 mr-3" />
+                    Manage Users
+                </NavLink>
+                <NavLink to="/admin/settings" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+                    <SettingsIcon className="h-5 w-5 mr-3" />
+                    System Settings
+                </NavLink>
+            </div>
+          </div>
         )}
       </nav>
       <div className="px-4 py-6 border-t border-primary-800">

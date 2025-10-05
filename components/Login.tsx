@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +20,7 @@ const Login: React.FC = () => {
             await login(username, password);
             navigate('/');
         } catch (err) {
-            setError('Invalid username or password. Try "admin" / "password" or "agent" / "password".');
+            setError('Invalid credentials. Try "admin", "agent", or "viewer" with password "password".');
         } finally {
             setIsLoading(false);
         }
