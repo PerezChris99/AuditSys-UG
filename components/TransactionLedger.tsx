@@ -62,17 +62,20 @@ const TransactionLedger: React.FC = () => {
     await new Promise(res => setTimeout(res, 500));
     
     let isChainValid = true;
+    // Transactions are sorted newest to oldest. We iterate through them.
     for (let i = 0; i < originalTransactions.length; i++) {
         const tx = originalTransactions[i];
-        const previousTx = originalTransactions[i + 1]; // sorted newest to oldest
+        const previousTx = originalTransactions[i + 1];
 
-        const expectedHash = await calculateHash(tx.id, tx.timestamp, tx.amount, tx.associatedRecordId, tx.previousHash);
-        if (tx.hash !== expectedHash) {
+        // Check 1: Data Integrity. Recalculate hash and compare with stored hash.
+        const recalculatedHash = await calculateHash(tx.id, tx.timestamp, tx.amount, tx.associatedRecordId, tx.previousHash);
+        if (tx.hash !== recalculatedHash) {
             isChainValid = false;
             setTamperedTxId(tx.id);
             break;
         }
 
+        // Check 2: Chain Integrity. Ensure previousHash points to the actual hash of the previous block.
         if (previousTx && tx.previousHash !== previousTx.hash) {
             isChainValid = false;
             setTamperedTxId(tx.id);
@@ -89,7 +92,7 @@ const TransactionLedger: React.FC = () => {
     const randomIndex = Math.floor(Math.random() * originalTransactions.length);
     const tamperedTx = { ...originalTransactions[randomIndex] };
     
-    // Modify the amount but keep the hash the same
+    // Modify the amount but keep the hash the same to simulate tampering
     tamperedTx.amount += 100;
     
     const newTransactions = [...originalTransactions];
