@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
+import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Ticket, Agent, Discrepancy, Transaction } from '../types';
+import { DiscrepancyStatus } from '../types';
 
 const Reports: React.FC = () => {
   const { agents, tickets, discrepancies, transactions } = useData();
@@ -29,6 +30,62 @@ const Reports: React.FC = () => {
   const handleDateChange = (setter: React.Dispatch<React.SetStateAction<{start: string, end: string}>>, field: 'start' | 'end', value: string) => {
     setter(prev => ({ ...prev, [field]: value }));
   };
+
+  // Data processing for charts
+  const ticketSalesData = useMemo(() => {
+    const filtered = tickets.filter(t => {
+      const date = new Date(t.travelDate);
+      const start = new Date(ticketDates.start);
+      start.setHours(0,0,0,0);
+      const end = new Date(ticketDates.end);
+      end.setHours(23, 59, 59, 999);
+      return date >= start && date <= end;
+    });
+
+    const dailyData = filtered.reduce((acc, ticket) => {
+        const date = ticket.travelDate;
+        acc[date] = (acc[date] || 0) + ticket.price;
+        return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(dailyData)
+        .map(([date, revenue]) => ({ date, revenue }))
+        .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [tickets, ticketDates]);
+
+  const discrepancyStatusData = useMemo(() => {
+    const filtered = discrepancies.filter(d => {
+      const date = new Date(d.reportedAt);
+      const start = new Date(discrepancyDates.start);
+      start.setHours(0,0,0,0);
+      const end = new Date(discrepancyDates.end);
+      end.setHours(23, 59, 59, 999);
+      return date >= start && date <= end;
+    });
+    
+    const statusCounts = filtered.reduce((acc, d) => {
+        acc[d.status] = (acc[d.status] || 0) + 1;
+        return acc;
+    }, {} as { [key in DiscrepancyStatus]?: number });
+
+    return Object.entries(statusCounts).map(([name, value]) => ({ name, value: value || 0 }));
+  }, [discrepancies, discrepancyDates]);
+  
+  const COLORS: {[key: string]: string} = {
+    [DiscrepancyStatus.Resolved]: '#3b82f6',
+    [DiscrepancyStatus.Pending]: '#f59e0b',
+    [DiscrepancyStatus.ActionRequired]: '#ef4444',
+  };
+
+  const agentPerformanceData = useMemo(() => {
+    return agents
+      .map(agent => ({
+        name: agent.name.split(' ')[0],
+        revenue: agent.totalRevenue,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [agents]);
+
 
   const downloadCSV = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -93,10 +150,38 @@ const Reports: React.FC = () => {
     downloadCSV(filtered, `ledger_report_${ledgerFilters.start}_to_${ledgerFilters.end}.csv`);
   };
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+      if (active && payload && payload.length) {
+          return (
+              <div className="bg-white p-2 border border-gray-300 rounded shadow-lg">
+                  <p className="label font-bold">{`${label}`}</p>
+                  <p className="intro text-primary-600">{`Revenue : $${payload[0].value.toLocaleString()}`}</p>
+              </div>
+          );
+      }
+      return null;
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-xl font-semibold text-gray-700 mb-4">Ticket Sales Report</h3>
+        <div className="h-80 w-full mb-6">
+            <ResponsiveContainer>
+                {ticketSalesData.length > 0 ? (
+                    <LineChart data={ticketSalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="revenue" stroke="#1d4ed8" strokeWidth={2} activeDot={{ r: 8 }} name="Daily Revenue" />
+                    </LineChart>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">No data available for selected date range.</div>
+                )}
+            </ResponsiveContainer>
+        </div>
         <div className="flex items-end space-x-4">
           <div>
             <label htmlFor="ticket-start-date" className="block text-sm font-medium text-gray-700">Start Date</label>
@@ -107,7 +192,7 @@ const Reports: React.FC = () => {
             <input type="date" id="ticket-end-date" value={ticketDates.end} onChange={e => handleDateChange(setTicketDates, 'end', e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
           </div>
           <button onClick={generateTicketReport} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            Generate & Download CSV
+            Download CSV
           </button>
         </div>
       </div>
@@ -115,10 +200,26 @@ const Reports: React.FC = () => {
       {canSeeAgentReports && (
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-xl font-semibold text-gray-700 mb-4">Agent Performance Report</h3>
+            <div className="h-80 w-full mb-6">
+                <ResponsiveContainer>
+                    {agentPerformanceData.length > 0 ? (
+                        <BarChart data={agentPerformanceData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                            <YAxis dataKey="name" type="category" width={80} />
+                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                            <Legend />
+                            <Bar dataKey="revenue" fill="#2563eb" name="Total Revenue" />
+                        </BarChart>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-gray-500">No agent data available.</div>
+                    )}
+                </ResponsiveContainer>
+            </div>
           <p className="text-sm text-gray-500 mb-4">This report provides a snapshot of current agent statistics.</p>
           <div className="flex items-end space-x-4">
             <button onClick={generateAgentReport} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-              Generate & Download CSV
+              Download CSV
             </button>
           </div>
         </div>
@@ -126,6 +227,32 @@ const Reports: React.FC = () => {
       
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-xl font-semibold text-gray-700 mb-4">Discrepancies Report</h3>
+        <div className="h-80 w-full mb-6 flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+                {discrepancyStatusData.length > 0 ? (
+                    <PieChart>
+                        <Pie
+                            data={discrepancyStatusData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={100}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                            {discrepancyStatusData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
+                            ))}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [value, name]} />
+                        <Legend />
+                    </PieChart>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">No data available for selected date range.</div>
+                )}
+            </ResponsiveContainer>
+        </div>
         <div className="flex items-end space-x-4">
           <div>
             <label htmlFor="discrepancy-start-date" className="block text-sm font-medium text-gray-700">Start Date</label>
@@ -136,7 +263,7 @@ const Reports: React.FC = () => {
             <input type="date" id="discrepancy-end-date" value={discrepancyDates.end} onChange={e => handleDateChange(setDiscrepancyDates, 'end', e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
           </div>
           <button onClick={generateDiscrepancyReport} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            Generate & Download CSV
+            Download CSV
           </button>
         </div>
       </div>
@@ -170,7 +297,7 @@ const Reports: React.FC = () => {
         </div>
         <div className="mt-4 flex justify-end">
             <button onClick={generateLedgerReport} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                Generate & Download CSV
+                Download CSV
             </button>
         </div>
       </div>

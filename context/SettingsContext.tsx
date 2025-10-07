@@ -32,18 +32,15 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
 
     const updateSettings = (newSettings: Settings) => {
-        // Basic validation to ensure data integrity
+        // "Server-side" validation to ensure data integrity
         if (typeof newSettings.transactionThreshold !== 'number' || newSettings.transactionThreshold < 0) {
-            console.error("Invalid transaction threshold");
-            return;
+            throw new Error("Invalid transaction threshold: must be a non-negative number.");
         }
         if (![3000, 5000, 10000].includes(newSettings.simulationInterval)) {
-            console.error("Invalid simulation interval");
-            return;
+            throw new Error("Invalid simulation interval selected.");
         }
         if (typeof newSettings.maintenanceMode !== 'boolean') {
-            console.error("Invalid maintenance mode value");
-            return;
+            throw new Error("Invalid maintenance mode value: must be true or false.");
         }
         setSettings(newSettings);
         localStorage.setItem('auditSysSettings', JSON.stringify(newSettings));

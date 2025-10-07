@@ -5,12 +5,13 @@ import { Transaction } from '../types';
 import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { calculateHash } from '../lib/cryptoUtils';
+import MultiSelectDropdown from './ui/MultiSelectDropdown';
 
 
 const TransactionLedger: React.FC = () => {
   const { transactions: originalTransactions, agents: mockAgents, setTransactions } = useData();
   const { user } = useAuth();
-  const [filterType, setFilterType] = useState<string>('All');
+  const [filterType, setFilterType] = useState<string[]>([]);
   const [filterAgent, setFilterAgent] = useState<string>('All');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
@@ -18,6 +19,9 @@ const TransactionLedger: React.FC = () => {
 
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   const canVerify = user?.role === 'Administrator' || user?.role === 'Auditor';
   const canTamper = user?.role === 'Administrator';
@@ -36,22 +40,33 @@ const TransactionLedger: React.FC = () => {
     setTamperedTxId(null);
   }, [originalTransactions]);
 
-  const transactionTypes = useMemo(() => ['All', ...Array.from(new Set(originalTransactions.map(tx => tx.type)))], [originalTransactions]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, filterAgent, filterStartDate, filterEndDate]);
+
+  const transactionTypes = useMemo(() => [...new Set(originalTransactions.map(tx => tx.type))], [originalTransactions]);
 
   const filteredTransactions = useMemo(() => {
     return originalTransactions.filter(tx => {
-      if (filterType !== 'All' && tx.type !== filterType) return false;
+      if (filterType.length > 0 && !filterType.includes(tx.type)) return false;
       if (filterAgent !== 'All' && tx.agentId !== filterAgent) return false;
       const txDate = new Date(tx.timestamp);
-      if (filterStartDate && new Date(filterStartDate) > txDate) return false;
-      if (filterEndDate) {
-        const endDate = new Date(filterEndDate);
-        endDate.setHours(23, 59, 59, 999);
-        if (endDate < txDate) return false;
-      }
+      const startDate = filterStartDate ? new Date(filterStartDate) : null;
+      if (startDate) startDate.setHours(0, 0, 0, 0);
+      const endDate = filterEndDate ? new Date(filterEndDate) : null;
+      if (endDate) endDate.setHours(23, 59, 59, 999);
+      if (startDate && startDate > txDate) return false;
+      if (endDate && endDate < txDate) return false;
       return true;
     });
   }, [filterType, filterAgent, filterStartDate, filterEndDate, originalTransactions]);
+
+  const totalPages = useMemo(() => Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE), [filteredTransactions]);
+  
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTransactions, currentPage]);
 
 
   const handleVerifyChain = async () => {
@@ -129,13 +144,91 @@ const TransactionLedger: React.FC = () => {
         return <p className="text-sm text-gray-500">Run a verification check to ensure ledger integrity.</p>;
     }
   };
+  
+   const PaginationControls = () => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = [];
+    const maxPageButtons = 7;
+    
+    if (totalPages <= maxPageButtons) {
+        for (let i = 1; i <= totalPages; i++) {
+            pageNumbers.push(i);
+        }
+    } else {
+        pageNumbers.push(1);
+        if (currentPage > 3) {
+            pageNumbers.push('...');
+        }
+        if (currentPage > 2) {
+            pageNumbers.push(currentPage - 1);
+        }
+        if (currentPage !== 1 && currentPage !== totalPages) {
+            pageNumbers.push(currentPage);
+        }
+        if (currentPage < totalPages - 1) {
+            pageNumbers.push(currentPage + 1);
+        }
+        if (currentPage < totalPages - 2) {
+            pageNumbers.push('...');
+        }
+        pageNumbers.push(totalPages);
+    }
+    
+    const uniquePageNumbers = [...new Set(pageNumbers)];
+
+    return (
+        <div className="flex items-center justify-between py-3 px-2">
+            <div className="text-sm text-gray-700">
+                Showing{' '}
+                <span className="font-medium">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span>
+                {' '}to{' '}
+                <span className="font-medium">{Math.min(currentPage * ITEMS_PER_PAGE, filteredTransactions.length)}</span>
+                {' '}of{' '}
+                <span className="font-medium">{filteredTransactions.length}</span>
+                {' '}results
+            </div>
+            <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                 <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Previous
+                </button>
+                {uniquePageNumbers.map((page, i) =>
+                    page === '...' ? (
+                        <span key={`ellipsis-${i}`} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">...</span>
+                    ) : (
+                        <button
+                            key={page}
+                            onClick={() => setCurrentPage(page as number)}
+                            aria-current={currentPage === page ? 'page' : undefined}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${currentPage === page ? 'z-10 bg-primary-50 border-primary-500 text-primary-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+                        >
+                            {page}
+                        </button>
+                    )
+                )}
+                <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Next
+                </button>
+            </nav>
+        </div>
+    );
+  };
+
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
+    <div className="bg-white p-6 rounded-lg shadow space-y-4">
       <h2 className="text-xl font-semibold text-gray-700 mb-2">Immutable Transaction Ledger</h2>
-      <p className="text-sm text-gray-500 mb-4">This is an append-only log. Each transaction is cryptographically linked to the previous one, ensuring a verifiable audit trail.</p>
+      <p className="text-sm text-gray-500">This is an append-only log. Each transaction is cryptographically linked to the previous one, ensuring a verifiable audit trail.</p>
       
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
           {canVerify && (
             <button onClick={handleVerifyChain} disabled={verificationStatus === 'verifying'} className="px-4 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 disabled:bg-primary-300 flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
@@ -153,13 +246,13 @@ const TransactionLedger: React.FC = () => {
         <VerificationStatus />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div>
-          <label htmlFor="tx-type-filter" className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
-          <select id="tx-type-filter" value={filterType} onChange={e => setFilterType(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-            {transactionTypes.map(type => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <MultiSelectDropdown
+          label="Transaction Type"
+          options={transactionTypes}
+          selectedOptions={filterType}
+          onChange={setFilterType}
+        />
         <div>
           <label htmlFor="agent-filter" className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
           <select id="agent-filter" value={filterAgent} onChange={e => setFilterAgent(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
@@ -191,7 +284,7 @@ const TransactionLedger: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200 font-mono text-xs">
-            {filteredTransactions.map((tx: Transaction, index: number) => (
+            {paginatedTransactions.map((tx: Transaction, index: number) => (
               <tr key={tx.id} className={`transition-colors duration-300 ${tamperedTxId === tx.id ? 'bg-red-100' : 'hover:bg-gray-50'}`}>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-700">{tx.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(tx.timestamp).toLocaleString()}</td>
@@ -211,6 +304,7 @@ const TransactionLedger: React.FC = () => {
           </tbody>
         </table>
       </div>
+       <PaginationControls />
     </div>
   );
 };

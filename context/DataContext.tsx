@@ -37,14 +37,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateDiscrepancy = useCallback((id: string, updatedDiscrepancy: Discrepancy) => {
     const isValidStatus = Object.values(DiscrepancyStatus).includes(updatedDiscrepancy.status);
     if (!isValidStatus) {
-        console.error(`Invalid status update for discrepancy ${id}`);
-        return;
+        throw new Error(`Invalid status provided for discrepancy.`);
     }
     setDiscrepancies(prev => {
         const index = prev.findIndex(d => d.id === id);
         if (index === -1) {
-            console.error(`Discrepancy with id ${id} not found.`);
-            return prev;
+            throw new Error(`Discrepancy with id ${id} not found.`);
         }
         const newDiscrepancies = [...prev];
         newDiscrepancies[index] = updatedDiscrepancy;

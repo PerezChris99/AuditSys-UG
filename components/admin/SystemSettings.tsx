@@ -5,7 +5,7 @@ import { useSettings } from '../../context/SettingsContext';
 const SystemSettings: React.FC = () => {
     const { settings, updateSettings } = useSettings();
     const [localSettings, setLocalSettings] = useState(settings);
-    const [errors, setErrors] = useState({ transactionThreshold: '' });
+    const [errors, setErrors] = useState({ transactionThreshold: '', form: '' });
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const isFormValid = !errors.transactionThreshold;
 
@@ -38,13 +38,20 @@ const SystemSettings: React.FC = () => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!isFormValid) return;
-
+        
+        setErrors(prev => ({...prev, form: ''}));
         setSaveStatus('saving');
-        updateSettings(localSettings);
-        setTimeout(() => {
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        }, 500);
+        
+        try {
+            updateSettings(localSettings);
+            setTimeout(() => {
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            }, 500);
+        } catch (error: any) {
+            setErrors(prev => ({...prev, form: error.message || 'An unexpected error occurred.'}));
+            setSaveStatus('idle');
+        }
     };
 
     return (
@@ -107,6 +114,8 @@ const SystemSettings: React.FC = () => {
                             </div>
                         </label>
                     </div>
+                    
+                    {errors.form && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{errors.form}</p>}
 
                     <div className="flex items-center space-x-4 pt-4">
                         <button
