@@ -44,6 +44,13 @@ export interface Transaction {
   previousHash: string;
 }
 
+export interface Note {
+  id: string;
+  content: string;
+  author: string;
+  timestamp: string;
+}
+
 export interface Discrepancy {
   id: string;
   type: 'Price Mismatch' | 'Unaccounted Fee' | 'Missing Deposit';
@@ -52,6 +59,8 @@ export interface Discrepancy {
   associatedTransactionId: string;
   reportedAt: string;
   status: DiscrepancyStatus;
+  assigneeId?: string;
+  notes?: Note[];
 }
 
 export type Role = 'Administrator' | 'Viewer' | 'Auditor' | 'Finance Officer' | 'Agent';

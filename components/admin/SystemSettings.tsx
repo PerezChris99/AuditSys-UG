@@ -5,7 +5,9 @@ import { useSettings } from '../../context/SettingsContext';
 const SystemSettings: React.FC = () => {
     const { settings, updateSettings } = useSettings();
     const [localSettings, setLocalSettings] = useState(settings);
+    const [errors, setErrors] = useState({ transactionThreshold: '' });
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const isFormValid = !errors.transactionThreshold;
 
     useEffect(() => {
         setLocalSettings(settings);
@@ -14,16 +16,29 @@ const SystemSettings: React.FC = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         
+        let parsedValue: string | number | boolean;
+
         if (type === 'checkbox') {
             const { checked } = e.target as HTMLInputElement;
-            setLocalSettings(prev => ({ ...prev, [name]: checked }));
+            parsedValue = checked;
         } else {
-             setLocalSettings(prev => ({ ...prev, [name]: Number(value) || value }));
+            parsedValue = Number(value);
+            if (name === 'transactionThreshold') {
+                if (parsedValue < 0) {
+                    setErrors(prev => ({ ...prev, transactionThreshold: 'Threshold cannot be negative.' }));
+                } else {
+                    setErrors(prev => ({ ...prev, transactionThreshold: '' }));
+                }
+            }
         }
+        
+        setLocalSettings(prev => ({ ...prev, [name]: parsedValue }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isFormValid) return;
+
         setSaveStatus('saving');
         updateSettings(localSettings);
         setTimeout(() => {
@@ -50,6 +65,7 @@ const SystemSettings: React.FC = () => {
                             onChange={handleChange}
                             className="mt-1 block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                         />
+                        {errors.transactionThreshold && <p className="mt-1 text-sm text-red-600">{errors.transactionThreshold}</p>}
                     </div>
 
                     <div>
@@ -95,8 +111,8 @@ const SystemSettings: React.FC = () => {
                     <div className="flex items-center space-x-4 pt-4">
                         <button
                             type="submit"
-                            disabled={saveStatus === 'saving'}
-                            className="px-6 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300"
+                            disabled={saveStatus === 'saving' || !isFormValid}
+                            className="px-6 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300 disabled:cursor-not-allowed"
                         >
                            {saveStatus === 'saving' ? 'Saving...' : 'Save Settings'}
                         </button>

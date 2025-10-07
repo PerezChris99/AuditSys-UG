@@ -1,7 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-// FIX: Import DiscrepancyStatus to fix type error.
-import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus } from '../types';
+import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus, Note } from '../types';
 import { useNotifications } from './NotificationContext';
 import { useAuth } from './AuthContext';
 import { generateInitialData } from '../lib/mockData';
@@ -14,6 +13,7 @@ interface DataContextType {
   transactions: Transaction[];
   discrepancies: Discrepancy[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
+  updateDiscrepancy: (id: string, updatedDiscrepancy: Discrepancy) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -34,18 +34,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { user } = useAuth();
   const { settings } = useSettings();
 
+  const updateDiscrepancy = useCallback((id: string, updatedDiscrepancy: Discrepancy) => {
+    const isValidStatus = Object.values(DiscrepancyStatus).includes(updatedDiscrepancy.status);
+    if (!isValidStatus) {
+        console.error(`Invalid status update for discrepancy ${id}`);
+        return;
+    }
+    setDiscrepancies(prev => {
+        const index = prev.findIndex(d => d.id === id);
+        if (index === -1) {
+            console.error(`Discrepancy with id ${id} not found.`);
+            return prev;
+        }
+        const newDiscrepancies = [...prev];
+        newDiscrepancies[index] = updatedDiscrepancy;
+        return newDiscrepancies;
+    });
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      // FIX: Wrap logic in an async IIFE to handle the promise from generateNewTransaction.
       (async () => {
         const newTicket = generateNewTicket(agents);
-        // FIX: Await the async function and provide a fallback for the previous hash.
         const newTransaction = await generateNewTransaction(newTicket, transactions[0]?.hash || '0'.repeat(64));
         
         setTickets(prev => [newTicket, ...prev]);
         setTransactions(prev => [newTransaction, ...prev]);
 
-        // FIX: All properties are now accessible on the resolved transaction object.
         if (newTransaction.amount > settings.transactionThreshold) {
             addNotification({
               message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
@@ -62,8 +77,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             amount: Math.floor(Math.random() * 50) + 10,
             associatedTransactionId: newTransaction.id,
             reportedAt: new Date().toISOString(),
-            // FIX: Use enum member for type safety.
             status: DiscrepancyStatus.ActionRequired,
+            notes: [{
+                id: `note-${Date.now()}`,
+                content: 'System automatically flagged this discrepancy.',
+                author: 'System',
+                timestamp: new Date().toISOString(),
+            }]
           };
           setDiscrepancies(prev => [newDiscrepancy, ...prev]);
           addNotification({
@@ -102,7 +122,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [user, agents, tickets, transactions, discrepancies]);
 
-  const value = { ...getFilteredData(), setTransactions };
+  const value = { ...getFilteredData(), setTransactions, updateDiscrepancy };
 
   return (
     <DataContext.Provider value={value}>

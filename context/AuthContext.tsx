@@ -70,15 +70,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addUser = useCallback((userData: Omit<User, 'id'> & { password?: string }) => {
-      const newUser: UserWithPassword = {
-          id: `user-${Date.now()}`,
-          ...userData,
-      };
-      setUsers(prev => [...prev, newUser]);
+      setUsers(prev => {
+          if (prev.some(u => u.username.toLowerCase() === userData.username.toLowerCase())) {
+              throw new Error('Username already exists.');
+          }
+          const newUser: UserWithPassword = {
+              id: `user-${Date.now()}`,
+              ...userData,
+          };
+          return [...prev, newUser];
+      });
   }, []);
 
   const updateUser = useCallback((userId: string, userData: Partial<Omit<User, 'id'>>) => {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...userData } : u));
+      setUsers(prev => {
+          if (userData.username && prev.some(u => u.username.toLowerCase() === userData.username!.toLowerCase() && u.id !== userId)) {
+              throw new Error('Username already exists.');
+          }
+          return prev.map(u => u.id === userId ? { ...u, ...userData } : u);
+      });
   }, []);
 
   const deleteUser = useCallback((userId: string) => {

@@ -1,4 +1,4 @@
-import { Agent, Ticket, Transaction, Discrepancy, TransactionStatus, DiscrepancyStatus } from '../types';
+import { Agent, Ticket, Transaction, Discrepancy, TransactionStatus, DiscrepancyStatus, Note } from '../types';
 import { calculateHash } from './cryptoUtils';
 
 // Using a seeded random number generator for consistency
@@ -137,6 +137,13 @@ const generateDiscrepancies = (count: number, transactions: Transaction[]): Disc
         const transaction = transactions[Math.floor(random() * transactions.length)];
         const reportedAt = new Date(new Date(transaction.timestamp).getTime() + (random() * 1000 * 3600 * 24));
         
+        const initialNote: Note = {
+            id: `note-${Date.now()}`,
+            content: 'System automatically flagged this discrepancy based on predefined rules.',
+            author: 'System',
+            timestamp: reportedAt.toISOString(),
+        };
+
         discrepancies.push({
             id: `DIS-${Date.now() - i * 50000}`,
             type: types[Math.floor(random() * types.length)],
@@ -145,6 +152,8 @@ const generateDiscrepancies = (count: number, transactions: Transaction[]): Disc
             associatedTransactionId: transaction.id,
             reportedAt: reportedAt.toISOString(),
             status: statuses[Math.floor(random() * statuses.length)],
+            notes: [initialNote],
+            assigneeId: undefined, // Can be assigned later
         });
     }
     return discrepancies;

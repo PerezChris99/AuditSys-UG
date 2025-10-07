@@ -32,6 +32,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
 
     const updateSettings = (newSettings: Settings) => {
+        // Basic validation to ensure data integrity
+        if (typeof newSettings.transactionThreshold !== 'number' || newSettings.transactionThreshold < 0) {
+            console.error("Invalid transaction threshold");
+            return;
+        }
+        if (![3000, 5000, 10000].includes(newSettings.simulationInterval)) {
+            console.error("Invalid simulation interval");
+            return;
+        }
+        if (typeof newSettings.maintenanceMode !== 'boolean') {
+            console.error("Invalid maintenance mode value");
+            return;
+        }
         setSettings(newSettings);
         localStorage.setItem('auditSysSettings', JSON.stringify(newSettings));
     };

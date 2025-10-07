@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { User, Role } from '../../types';
 import { EditIcon, TrashIcon, UserIcon } from '../ui/Icons';
@@ -13,7 +13,26 @@ const ManageUsers: React.FC = () => {
         password: '',
         role: 'Agent' as Role,
     });
-    const [error, setError] = useState('');
+    const [errors, setErrors] = useState({
+        username: '',
+        password: '',
+        form: '',
+    });
+
+    const validate = (fieldData: typeof formData) => {
+        const newErrors = { username: '', password: '', form: '' };
+        if (!fieldData.username.trim()) {
+            newErrors.username = 'Username is required.';
+        } else if (users.some(u => u.username.toLowerCase() === fieldData.username.toLowerCase() && u.id !== editingUser?.id)) {
+            newErrors.username = 'Username already exists.';
+        }
+
+        if (!editingUser && (!fieldData.password || fieldData.password.length < 6)) {
+            newErrors.password = 'Password must be at least 6 characters.';
+        }
+        setErrors(newErrors);
+        return Object.values(newErrors).every(x => x === '');
+    };
 
     const openModalForEdit = (user: User) => {
         setEditingUser(user);
@@ -22,14 +41,14 @@ const ManageUsers: React.FC = () => {
             password: '',
             role: user.role,
         });
-        setError('');
+        setErrors({ username: '', password: '', form: '' });
         setIsModalOpen(true);
     };
 
     const openModalForAdd = () => {
         setEditingUser(null);
         setFormData({ username: '', password: '', role: 'Agent' });
-        setError('');
+        setErrors({ username: '', password: '', form: '' });
         setIsModalOpen(true);
     };
 
@@ -39,34 +58,35 @@ const ManageUsers: React.FC = () => {
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const newFormData = { ...formData, [e.target.name]: e.target.value };
+        setFormData(newFormData);
+        validate(newFormData);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        setErrors(prev => ({ ...prev, form: '' }));
 
-        if (!formData.username) {
-            setError('Username is required.');
+        if (!validate(formData)) {
             return;
         }
 
-        if (editingUser) {
-            // Edit user
-            updateUser(editingUser.id, { username: formData.username, role: formData.role });
-        } else {
-            // Add user
-            if (!formData.password || formData.password.length < 6) {
-                setError('Password is required and must be at least 6 characters.');
-                return;
+        try {
+            if (editingUser) {
+                // Edit user
+                updateUser(editingUser.id, { username: formData.username, role: formData.role });
+            } else {
+                // Add user
+                addUser({
+                    username: formData.username,
+                    password: formData.password,
+                    role: formData.role,
+                });
             }
-            addUser({
-                username: formData.username,
-                password: formData.password,
-                role: formData.role,
-            });
+            closeModal();
+        } catch (error: any) {
+            setErrors(prev => ({...prev, form: error.message || 'An unexpected error occurred.'}));
         }
-        closeModal();
     };
 
     const handleDelete = (userId: string) => {
@@ -78,21 +98,25 @@ const ManageUsers: React.FC = () => {
             deleteUser(userId);
         }
     };
+    
+    const isFormValid = Object.values(errors).every(x => x === '');
 
     const UserModal = () => (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
                 <h2 className="text-2xl font-bold mb-4">{editingUser ? 'Edit User' : 'Add New User'}</h2>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Username</label>
                             <input type="text" name="username" value={formData.username} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"/>
+                            {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username}</p>}
                         </div>
                         {!editingUser && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Password</label>
                                 <input type="password" name="password" value={formData.password} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"/>
+                                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                             </div>
                         )}
                         <div>
@@ -104,10 +128,10 @@ const ManageUsers: React.FC = () => {
                             </select>
                         </div>
                     </div>
-                    {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+                    {errors.form && <p className="mt-4 text-sm text-red-600">{errors.form}</p>}
                     <div className="mt-6 flex justify-end space-x-3">
                         <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">{editingUser ? 'Save Changes' : 'Create User'}</button>
+                        <button type="submit" disabled={!isFormValid} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-primary-300 disabled:cursor-not-allowed">{editingUser ? 'Save Changes' : 'Create User'}</button>
                     </div>
                 </form>
             </div>
