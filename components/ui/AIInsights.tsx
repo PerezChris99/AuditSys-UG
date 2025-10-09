@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { getAIInsights } from '../../lib/gemini';
 import { SparklesIcon } from './Icons';
 import { marked } from 'marked';
+import { Ticket, Discrepancy } from '../../types';
 
 const AIInsights: React.FC = () => {
     const { tickets, discrepancies } = useData();
@@ -10,18 +11,27 @@ const AIInsights: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Use a ref to hold the latest data without causing re-renders of dependents.
+    const dataRef = useRef<{ tickets: Ticket[], discrepancies: Discrepancy[] }>({ tickets, discrepancies });
+    useEffect(() => {
+        dataRef.current = { tickets, discrepancies };
+    });
+
     const fetchInsights = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
+            // Access the latest data from the ref.
+            const { tickets: currentTickets, discrepancies: currentDiscrepancies } = dataRef.current;
+            
             // Get data from the last 24 hours for analysis
             const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const recentTickets = tickets.filter(t => new Date(t.travelDate) > oneDayAgo);
-            const recentDiscrepancies = discrepancies.filter(d => new Date(d.reportedAt) > oneDayAgo);
+            const recentTickets = currentTickets.filter(t => new Date(t.travelDate) > oneDayAgo);
+            const recentDiscrepancies = currentDiscrepancies.filter(d => new Date(d.reportedAt) > oneDayAgo);
 
             if (recentTickets.length === 0 && recentDiscrepancies.length === 0) {
                  setInsights('<p class="text-gray-500">No significant activity in the last 24 hours to analyze.</p>');
-                 setIsLoading(false); // Make sure to stop loading
+                 setIsLoading(false);
                  return;
             }
 
@@ -34,9 +44,10 @@ const AIInsights: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [tickets, discrepancies]);
+    }, []); // The function is now stable and doesn't depend on changing data.
 
     useEffect(() => {
+        // Fetch insights only on component mount.
         fetchInsights();
     }, [fetchInsights]);
 

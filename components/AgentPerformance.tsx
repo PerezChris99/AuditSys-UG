@@ -88,6 +88,21 @@ const AgentPerformance: React.FC = () => {
     );
   };
 
+  // New function to generate sparkline data
+  const generateAgentTrendData = (baseRevenue: number) => {
+    const data = [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const monthlyAverage = baseRevenue / (12 + (Math.random() * 4 - 2)); // Slightly varied total duration
+    for (let i = 0; i < 6; i++) {
+        const variance = (Math.random() - 0.5) * monthlyAverage * 0.8; // +/- 40% variance
+        data.push({
+            name: months[i],
+            revenue: Math.max(0, monthlyAverage + variance),
+        });
+    }
+    return data;
+  };
+
 
   return (
     <div className="space-y-6">
@@ -103,60 +118,76 @@ const AgentPerformance: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tickets Sold</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
+                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue Trend (6 Mo)</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Accuracy</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Dispute Rate</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Discrepancy Rate</th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">AI Review</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {mockAgents.map((agent: Agent) => (
-                <tr key={agent.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <img className="h-10 w-10 rounded-full" src={agent.avatarUrl} alt={agent.name} />
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{agent.name}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{agent.ticketsSold}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${agent.totalRevenue.toLocaleString()}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                      <span className={agent.accuracy > 98 ? "text-green-600" : "text-yellow-600"}>{agent.accuracy}%</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                      <span className={agent.disputeRate < 1 ? "text-green-600" : "text-red-600"}>{agent.disputeRate}%</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button
-                      onClick={() => handleViewTransactions(agent.id)}
-                      className="text-primary-600 hover:text-primary-900 font-semibold"
-                    >
-                      View Transactions
-                    </button>
-                  </td>
-                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button
-                      onClick={() => handleGenerateReview(agent)}
-                      className="text-primary-600 hover:text-primary-900 font-semibold flex items-center justify-center mx-auto"
-                    >
-                      <SparklesIcon className="h-4 w-4 mr-1" />
-                      Generate
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {mockAgents.map((agent: Agent) => {
+                const trendData = generateAgentTrendData(agent.totalRevenue);
+                return (
+                    <tr key={agent.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <img className="h-10 w-10 rounded-full" src={agent.avatarUrl} alt={agent.name} />
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{agent.name}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.id}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{agent.ticketsSold}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right font-semibold">${agent.totalRevenue.toLocaleString()}</td>
+                      <td className="px-2 py-4 whitespace-nowrap" style={{ width: '150px', height: '60px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={trendData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: 'white', border: '1px solid #ddd', padding: '5px', fontSize: '12px' }}
+                                    formatter={(value: number) => [`$${Math.round(value).toLocaleString()}`, null]}
+                                    labelFormatter={(label) => `Month: ${label}`}
+                                />
+                                <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={2} dot={false} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                          <span className={agent.accuracy > 98 ? "text-green-600" : "text-yellow-600"}>{agent.accuracy}%</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                          <span className={agent.disputeRate < 1 ? "text-green-600" : "text-red-600"}>{agent.disputeRate}%</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <button
+                          onClick={() => handleViewTransactions(agent.id)}
+                          className="text-primary-600 hover:text-primary-900 font-semibold"
+                        >
+                          View Transactions
+                        </button>
+                      </td>
+                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <button
+                          onClick={() => handleGenerateReview(agent)}
+                          className="text-primary-600 hover:text-primary-900 font-semibold flex items-center justify-center mx-auto"
+                        >
+                          <SparklesIcon className="h-4 w-4 mr-1" />
+                          Generate
+                        </button>
+                      </td>
+                    </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Tickets Sold Over Time</h3>
             <ResponsiveContainer width="100%" height={300}>
