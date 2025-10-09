@@ -5,6 +5,7 @@ import { DiscrepancyStatus } from '../types';
 import Card from './ui/Card';
 import { DollarSignIcon, TicketIcon, AgentIcon, AlertIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
+import AIInsights from './ui/AIInsights';
 
 const Dashboard: React.FC = () => {
   const { agents, tickets, discrepancies } = useData();
@@ -31,10 +32,12 @@ const Dashboard: React.FC = () => {
       return acc;
     }, [] as { name: string, revenue: number }[]).slice(-30);
 
-  const agentPerformanceData = agents.map(agent => ({
-    name: agent.name.split(' ')[0],
-    revenue: agent.totalRevenue,
-    tickets: agent.ticketsSold,
+  const agentPerformanceData = [...agents]
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .slice(0, 5)
+    .map(agent => ({
+      name: agent.name.split(' ')[0],
+      revenue: agent.totalRevenue,
   }));
   
   const discrepancyStatusData = discrepancies
@@ -91,13 +94,13 @@ const Dashboard: React.FC = () => {
             <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Top Agents by Revenue</h3>
                 <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={agentPerformanceData} layout="vertical">
+                <BarChart data={agentPerformanceData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={80} />
-                    <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+                    <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
                     <Legend />
-                    <Bar dataKey="revenue" fill="#2563eb" />
+                    <Bar dataKey="revenue" fill="#2563eb" name="Revenue" />
                 </BarChart>
                 </ResponsiveContainer>
             </div>
@@ -120,6 +123,10 @@ const Dashboard: React.FC = () => {
           </>
         )}
       </div>
+      
+      {!isAgentRole && (
+        <AIInsights />
+      )}
     </div>
   );
 };

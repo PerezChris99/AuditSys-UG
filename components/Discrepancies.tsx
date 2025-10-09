@@ -3,11 +3,14 @@ import { useData } from '../context/DataContext';
 import { Discrepancy, DiscrepancyStatus, Note, User } from '../types';
 import StatusBadge from './ui/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { EditIcon, EmailIcon } from './ui/Icons';
+import { EditIcon, EmailIcon, SparklesIcon } from './ui/Icons';
 import MultiSelectDropdown from './ui/MultiSelectDropdown';
+import { getDiscrepancySummary } from '../lib/gemini';
+import { marked } from 'marked';
+
 
 const Discrepancies: React.FC = () => {
-  const { discrepancies, updateDiscrepancy } = useData();
+  const { discrepancies, updateDiscrepancy, agents, transactions } = useData();
   const { user, users } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -17,6 +20,10 @@ const Discrepancies: React.FC = () => {
   const [newNote, setNewNote] = useState('');
   const [isChanged, setIsChanged] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // State for AI Summary
+  const [aiSummary, setAiSummary] = useState('');
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   
   // State for Email Modal
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -101,6 +108,30 @@ const Discrepancies: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [filters]);
+  
+   // Fetch AI summary when modal opens
+  useEffect(() => {
+    if (isModalOpen && selectedDiscrepancy) {
+      const fetchSummary = async () => {
+        setIsSummaryLoading(true);
+        setAiSummary('');
+        try {
+          const associatedTransaction = transactions.find(t => t.id === selectedDiscrepancy.associatedTransactionId);
+          const agent = associatedTransaction ? agents.find(a => a.id === associatedTransaction.agentId) : undefined;
+          
+          const summary = await getDiscrepancySummary(selectedDiscrepancy, associatedTransaction, agent);
+          const html = await marked.parse(summary);
+          setAiSummary(html);
+
+        } catch (error) {
+          setAiSummary('<p class="text-red-500">Could not load AI summary.</p>');
+        } finally {
+          setIsSummaryLoading(false);
+        }
+      };
+      fetchSummary();
+    }
+  }, [isModalOpen, selectedDiscrepancy, transactions, agents]);
 
   const openModal = (discrepancy: Discrepancy) => {
     setSelectedDiscrepancy(discrepancy);
@@ -118,6 +149,7 @@ const Discrepancies: React.FC = () => {
     setNewNote('');
     setNewStatus('');
     setNewAssigneeId('');
+    setAiSummary(''); // Clear summary on close
   };
 
   const handleSaveChanges = () => {
@@ -308,11 +340,28 @@ AuditSys UG
 
   const DiscrepancyModal = () => {
     if (!isModalOpen || !selectedDiscrepancy) return null;
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl">
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Manage Discrepancy: <span className="text-red-600">{selectedDiscrepancy.id}</span></h2>
           
+          <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
+                <div className="flex items-center text-md font-semibold text-primary-800 mb-2">
+                    <SparklesIcon className="h-5 w-5 mr-2" />
+                    AI Summary & Suggestions
+                </div>
+                {isSummaryLoading ? (
+                    <div className="space-y-2 animate-pulse">
+                        <div className="h-4 bg-primary-100 rounded w-3/4"></div>
+                        <div className="h-4 bg-primary-100 rounded w-1/2"></div>
+                        <div className="h-4 bg-primary-100 rounded w-2/3"></div>
+                    </div>
+                ) : (
+                    <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: aiSummary }} />
+                )}
+            </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
               <h3 className="font-semibold text-gray-700">Details</h3>

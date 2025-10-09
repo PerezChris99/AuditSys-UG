@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { Transaction } from '../types';
+import { Transaction, Agent } from '../types';
 import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { calculateHash } from '../lib/cryptoUtils';
@@ -9,12 +9,15 @@ import MultiSelectDropdown from './ui/MultiSelectDropdown';
 
 
 const TransactionLedger: React.FC = () => {
-  const { transactions: originalTransactions, agents: mockAgents, setTransactions } = useData();
+  const { transactions: originalTransactions, agents, setTransactions } = useData();
   const { user } = useAuth();
-  const [filterType, setFilterType] = useState<string[]>([]);
-  const [filterAgent, setFilterAgent] = useState<string>('All');
-  const [filterStartDate, setFilterStartDate] = useState<string>('');
-  const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [filters, setFilters] = useState({
+    transactionTypes: [] as string[],
+    agentId: 'All',
+    startDate: '',
+    endDate: '',
+  });
+  
   const [searchParams] = useSearchParams();
 
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
@@ -26,13 +29,14 @@ const TransactionLedger: React.FC = () => {
   const canVerify = user?.role === 'Administrator' || user?.role === 'Auditor';
   const canTamper = user?.role === 'Administrator';
 
+
   useEffect(() => {
     // This deep-linking allows navigating from Agent Performance to a pre-filtered ledger
     const agentIdFromUrl = searchParams.get('agentId');
-    if (agentIdFromUrl && mockAgents.some(agent => agent.id === agentIdFromUrl)) {
-      setFilterAgent(agentIdFromUrl);
+    if (agentIdFromUrl && agents.some(agent => agent.id === agentIdFromUrl)) {
+      setFilters(prev => ({ ...prev, agentId: agentIdFromUrl }));
     }
-  }, [searchParams, mockAgents]);
+  }, [searchParams, agents]);
 
   useEffect(() => {
     // Reset verification status when data changes
@@ -42,24 +46,24 @@ const TransactionLedger: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterType, filterAgent, filterStartDate, filterEndDate]);
+  }, [filters]);
 
   const transactionTypes = useMemo(() => [...new Set(originalTransactions.map(tx => tx.type))], [originalTransactions]);
 
   const filteredTransactions = useMemo(() => {
     return originalTransactions.filter(tx => {
-      if (filterType.length > 0 && !filterType.includes(tx.type)) return false;
-      if (filterAgent !== 'All' && tx.agentId !== filterAgent) return false;
+      if (filters.transactionTypes && filters.transactionTypes.length > 0 && !filters.transactionTypes.includes(tx.type)) return false;
+      if (filters.agentId !== 'All' && tx.agentId !== filters.agentId) return false;
       const txDate = new Date(tx.timestamp);
-      const startDate = filterStartDate ? new Date(filterStartDate) : null;
+      const startDate = filters.startDate ? new Date(filters.startDate) : null;
       if (startDate) startDate.setHours(0, 0, 0, 0);
-      const endDate = filterEndDate ? new Date(filterEndDate) : null;
+      const endDate = filters.endDate ? new Date(filters.endDate) : null;
       if (endDate) endDate.setHours(23, 59, 59, 999);
       if (startDate && startDate > txDate) return false;
       if (endDate && endDate < txDate) return false;
       return true;
     });
-  }, [filterType, filterAgent, filterStartDate, filterEndDate, originalTransactions]);
+  }, [filters, originalTransactions]);
 
   const totalPages = useMemo(() => Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE), [filteredTransactions]);
   
@@ -68,6 +72,14 @@ const TransactionLedger: React.FC = () => {
     return filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredTransactions, currentPage]);
 
+  const clearFilters = () => {
+    setFilters({
+      transactionTypes: [],
+      agentId: 'All',
+      startDate: '',
+      endDate: '',
+    });
+  };
 
   const handleVerifyChain = async () => {
     setVerificationStatus('verifying');
@@ -245,30 +257,38 @@ const TransactionLedger: React.FC = () => {
         </div>
         <VerificationStatus />
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <MultiSelectDropdown
-          label="Transaction Type"
-          options={transactionTypes}
-          selectedOptions={filterType}
-          onChange={setFilterType}
-        />
-        <div>
-          <label htmlFor="agent-filter" className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
-          <select id="agent-filter" value={filterAgent} onChange={e => setFilterAgent(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
-            <option value="All">All Agents</option>
-            {mockAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="start-date-filter" className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-          <input type="date" id="start-date-filter" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
-        </div>
-        <div>
-          <label htmlFor="end-date-filter" className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-          <input type="date" id="end-date-filter" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
+      
+       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <div className="lg:col-span-1 xl:col-span-1">
+             <MultiSelectDropdown
+                label="Transaction Type"
+                options={transactionTypes}
+                selectedOptions={filters.transactionTypes || []}
+                onChange={selected => setFilters(prev => ({...prev, transactionTypes: selected}))}
+             />
+          </div>
+          <div>
+            <label htmlFor="agent-filter" className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+            <select id="agent-filter" value={filters.agentId} onChange={e => setFilters(prev => ({...prev, agentId: e.target.value}))} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+              <option value="All">All Agents</option>
+              {agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="start-date-filter" className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input type="date" id="start-date-filter" value={filters.startDate} onChange={e => setFilters(prev => ({...prev, startDate: e.target.value}))} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
+          </div>
+          <div>
+            <label htmlFor="end-date-filter" className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input type="date" id="end-date-filter" value={filters.endDate} onChange={e => setFilters(prev => ({...prev, endDate: e.target.value}))} className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" />
+          </div>
+          <div className="flex items-end h-full">
+            <button onClick={clearFilters} className="w-full px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">Clear Filters</button>
+          </div>
         </div>
       </div>
+
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">

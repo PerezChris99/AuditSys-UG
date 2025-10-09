@@ -12,7 +12,9 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.2.1",
-    "react-router-dom": "^7.9.3"
+    "react-router-dom": "^7.9.3",
+    "@google/genai": "^1.23.0",
+    "marked": "^16.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
