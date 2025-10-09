@@ -3,11 +3,19 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Transaction, Agent } from '../types';
-import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon } from './ui/Icons';
+import { LinkIcon, CheckCircleIcon, ShieldExclamationIcon, TamperIcon, UserIcon, FileTextIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import { calculateHash } from '../lib/cryptoUtils';
 import MultiSelectDropdown from './ui/MultiSelectDropdown';
 import NaturalLanguageQuery from './ui/NaturalLanguageQuery';
+
+
+const DetailItem: React.FC<{ label: string; value: string; isHash?: boolean, valueColor?: string, icon?: React.ReactNode }> = ({ label, value, isHash = false, valueColor = 'text-gray-700', icon }) => (
+    <div>
+        <dt className="text-sm font-medium text-gray-500 flex items-center">{icon}{label}</dt>
+        <dd className={`mt-1 text-sm ${valueColor} ${isHash ? 'break-all font-mono' : ''}`}>{value}</dd>
+    </div>
+);
 
 
 const TransactionLedger: React.FC = () => {
@@ -21,7 +29,7 @@ const TransactionLedger: React.FC = () => {
   });
   
   const [searchParams] = useSearchParams();
-  const [riskDetails, setRiskDetails] = useState<{reason: string, score: number} | null>(null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
@@ -50,6 +58,14 @@ const TransactionLedger: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [filters]);
+  
+  const agentMap = useMemo(() => {
+    return agents.reduce((acc, agent) => {
+      acc[agent.id] = agent;
+      return acc;
+    }, {} as Record<string, Agent>);
+  }, [agents]);
+
 
   const transactionTypes = useMemo(() => [...new Set(originalTransactions.map(tx => tx.type))], [originalTransactions]);
 
@@ -90,10 +106,16 @@ const TransactionLedger: React.FC = () => {
         ...aiFilters,
     }));
   };
+  
+  const handleRowClick = (txId: string) => {
+    setExpandedRowId(currentId => (currentId === txId ? null : txId));
+  };
+
 
   const handleVerifyChain = async () => {
     setVerificationStatus('verifying');
     setTamperedTxId(null);
+    setExpandedRowId(null);
     
     // Simulate network delay
     await new Promise(res => setTimeout(res, 500));
@@ -164,7 +186,7 @@ const TransactionLedger: React.FC = () => {
   const VerificationStatus = () => {
     switch (verificationStatus) {
       case 'verifying':
-        return <div className="p-3 bg-blue-100 text-blue-700 rounded-lg text-sm flex items-center"><svg className="animate-spin h-5 w-5 mr-3" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Verifying cryptographic links...</div>;
+        return <div className="p-3 bg-blue-100 text-blue-700 rounded-lg text-sm flex items-center"><svg className="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Verifying cryptographic links...</div>;
       case 'verified':
         return <div className="p-3 bg-green-100 text-green-700 rounded-lg text-sm flex items-center"><CheckCircleIcon className="h-5 w-5 mr-2" />Ledger Integrity Verified. All transactions are cryptographically linked and untampered.</div>;
       case 'failed':
@@ -251,36 +273,9 @@ const TransactionLedger: React.FC = () => {
     );
   };
   
-  const RiskDetailsModal = () => {
-    if (!riskDetails) return null;
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setRiskDetails(null)}>
-            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-                <div className="flex items-start">
-                    <div className={`p-2 rounded-full mr-4 ${getRiskColor(riskDetails.score)}`}>
-                       <ShieldExclamationIcon className={`h-6 w-6 ${getRiskColor(riskDetails.score).split(' ')[1]}`}/>
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800">AI Fraud Risk Analysis</h3>
-                        <p className={`text-2xl font-bold ${getRiskColor(riskDetails.score).split(' ')[1]}`}>{riskDetails.score} / 100</p>
-                    </div>
-                </div>
-                <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-semibold text-gray-700 mb-1">Justification:</h4>
-                    <p className="text-gray-600 text-sm">{riskDetails.reason}</p>
-                </div>
-                 <div className="mt-6 flex justify-end">
-                    <button onClick={() => setRiskDetails(null)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
-                </div>
-            </div>
-        </div>
-    );
-  };
-
-
+  
   return (
     <div className="bg-white p-6 rounded-lg shadow space-y-4">
-      <RiskDetailsModal />
       <h2 className="text-xl font-semibold text-gray-700 mb-2">Immutable Transaction Ledger</h2>
       <p className="text-sm text-gray-500">This is an append-only log. Each transaction is cryptographically linked to the previous one, ensuring a verifiable audit trail.</p>
       
@@ -354,30 +349,60 @@ const TransactionLedger: React.FC = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Previous Hash</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200 font-mono text-xs">
+          <tbody className="bg-white divide-y divide-gray-200 text-xs">
             {paginatedTransactions.map((tx: Transaction, index: number) => (
-              <tr key={tx.id} className={`transition-colors duration-300 ${tamperedTxId === tx.id ? 'bg-red-100' : 'hover:bg-gray-50'}`}>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-700">{tx.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(tx.timestamp).toLocaleString()}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-sans">{tx.type}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{renderDetails(tx)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-700 text-right font-sans">${tx.amount.toFixed(2)}</td>
-                 <td className="px-6 py-4 whitespace-nowrap text-center">
-                    {tx.fraudScore && (
-                        <button
-                            onClick={() => setRiskDetails({ reason: tx.fraudReason || 'No details provided.', score: tx.fraudScore! })}
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:opacity-80 ${getRiskColor(tx.fraudScore)}`}
-                        >
-                            {tx.fraudScore.toFixed(0)}
-                        </button>
-                    )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-green-600">{tx.hash.substring(0, 16)}...</td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500 flex items-center">
-                  {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(64) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
-                  {tx.previousHash.substring(0, 16)}...
-                </td>
-              </tr>
+              <React.Fragment key={tx.id}>
+                <tr 
+                  onClick={() => handleRowClick(tx.id)}
+                  className={`transition-colors duration-200 cursor-pointer ${tamperedTxId === tx.id ? 'bg-red-100 hover:bg-red-200' : (expandedRowId === tx.id ? 'bg-primary-100' : 'hover:bg-gray-50')}`}
+                >
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-mono">{tx.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500">{new Date(tx.timestamp).toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-sans">{tx.type}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{renderDetails(tx)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700 text-right font-sans">${tx.amount.toFixed(2)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {tx.fraudScore ? (
+                            <div className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRiskColor(tx.fraudScore)}`}>
+                                {tx.fraudScore.toFixed(0)}
+                            </div>
+                        ) : <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-green-600 font-mono">{tx.hash.substring(0, 16)}...</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 flex items-center font-mono">
+                    {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(64) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
+                    {tx.previousHash.substring(0, 16)}...
+                    </td>
+                </tr>
+                 {expandedRowId === tx.id && (
+                    <tr className={tamperedTxId === tx.id ? 'bg-red-100' : 'bg-gray-50'}>
+                        <td colSpan={8} className="p-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="md:col-span-1 space-y-4">
+                                    <DetailItem label="Agent" value={`${agentMap[tx.agentId]?.name || 'Unknown'} (${tx.agentId})`} icon={<UserIcon className="h-4 w-4 mr-2" />} />
+                                    <DetailItem label="Associated Record" value={tx.associatedRecordId} icon={<FileTextIcon className="h-4 w-4 mr-2" />} />
+                                </div>
+                                <div className="md:col-span-2 space-y-4">
+                                     <DetailItem label="Current Hash" value={tx.hash} isHash valueColor="text-green-700" />
+                                     <DetailItem label="Previous Hash" value={tx.previousHash} isHash />
+                                </div>
+                            </div>
+                            {tx.fraudScore && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                                        <ShieldExclamationIcon className="h-5 w-5 mr-2" />
+                                        AI Fraud Risk Analysis
+                                    </h4>
+                                    <div className="flex items-baseline space-x-2">
+                                        <p className={`text-2xl font-bold ${getRiskColor(tx.fraudScore).split(' ')[1]}`}>{tx.fraudScore.toFixed(0)}/100</p>
+                                        <p className="text-sm text-gray-600">{tx.fraudReason}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </td>
+                    </tr>
+                 )}
+              </React.Fragment>
             ))}
             {filteredTransactions.length === 0 && (
               <tr><td colSpan={8} className="text-center py-10 text-gray-500 font-sans">No transactions found for the selected filters.</td></tr>

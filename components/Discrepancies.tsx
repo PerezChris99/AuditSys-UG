@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
-import { Discrepancy, DiscrepancyStatus, Note, User } from '../../types';
+import { Discrepancy, DiscrepancyStatus, Note, User, Ticket, Transaction } from '../../types';
 import StatusBadge from './ui/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { EditIcon, EmailIcon, FileTextIcon } from './ui/Icons';
@@ -10,7 +11,8 @@ import { marked } from 'marked';
 
 
 const Discrepancies: React.FC = () => {
-  const { discrepancies, updateDiscrepancy, agents, transactions } = useData();
+  // FIX: Removed `users: allUsers` from destructuring. `users` are correctly provided by `useAuth`.
+  const { discrepancies, updateDiscrepancy, transactions, tickets } = useData();
   const { user, users } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -330,6 +332,21 @@ AuditSys UG
 
   const DiscrepancyModal = () => {
     if (!isModalOpen || !selectedDiscrepancy) return null;
+    
+    const associatedData = useMemo(() => {
+        if (!selectedDiscrepancy) return { transaction: null, ticket: null };
+
+        const transaction = transactions.find(
+            (t) => t.id === selectedDiscrepancy.associatedTransactionId
+        );
+        if (!transaction) return { transaction: null, ticket: null };
+
+        const ticket = tickets.find(
+            (t) => t.id === transaction.associatedRecordId
+        );
+
+        return { transaction, ticket };
+    }, [selectedDiscrepancy, transactions, tickets]);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -343,6 +360,23 @@ AuditSys UG
               <p className="text-sm text-gray-500"><span className="font-medium">Amount:</span> <span className="font-bold text-red-600">${selectedDiscrepancy.amount.toFixed(2)}</span></p>
               <p className="text-sm text-gray-500"><span className="font-medium">Reported:</span> {new Date(selectedDiscrepancy.reportedAt).toLocaleString()}</p>
               <p className="text-sm text-gray-500"><span className="font-medium">Transaction ID:</span> {selectedDiscrepancy.associatedTransactionId}</p>
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-600 mb-2">Associated Transaction Context</h4>
+                {associatedData.transaction && associatedData.ticket ? (
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p><span className="font-medium">Passenger:</span> {associatedData.ticket.passengerName}</p>
+                    <p><span className="font-medium">Flight:</span> {associatedData.ticket.flightNumber}</p>
+                    <p><span className="font-medium">Route:</span> {associatedData.ticket.origin} &rarr; {associatedData.ticket.destination}</p>
+                    <p><span className="font-medium">Travel Date:</span> {associatedData.ticket.travelDate}</p>
+                    <p><span className="font-medium">Ticket Price:</span> ${associatedData.ticket.price.toFixed(2)}</p>
+                  </div>
+                ) : associatedData.transaction ? (
+                  <p className="text-sm text-gray-500 italic">Associated transaction found, but ticket details are unavailable.</p>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No associated transaction details found.</p>
+                )}
+              </div>
             </div>
             <div>
               <div className="mb-4">
@@ -383,21 +417,23 @@ AuditSys UG
 
           <div className="mb-4">
             <h3 className="font-semibold text-gray-700 mb-2">Notes & History</h3>
-            <div className="max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md border text-sm space-y-2">
+            <div className="max-h-40 overflow-y-auto bg-gray-50 p-3 rounded-md border text-sm space-y-3">
               {selectedDiscrepancy.notes && selectedDiscrepancy.notes.length > 0 ? (
-                selectedDiscrepancy.notes.map(note => (
-                  <div key={note.id}>
+                [...selectedDiscrepancy.notes].reverse().map(note => (
+                  <div key={note.id} className="border-l-4 border-primary-200 pl-3">
                     <p className="text-gray-800">{note.content}</p>
-                    <p className="text-xs text-gray-400">by {note.author} on {new Date(note.timestamp).toLocaleDateString()}</p>
+                    <div className="text-xs text-gray-500 mt-1">
+                        <span className="font-semibold">{note.author}</span> &mdash; <span>{new Date(note.timestamp).toLocaleString()}</span>
+                    </div>
                   </div>
                 ))
-              ) : <p className="text-gray-500">No notes yet.</p>}
+              ) : <p className="text-gray-500 italic">No notes have been added yet.</p>}
             </div>
           </div>
 
           <div>
-             <label className="block text-sm font-medium text-gray-700">Add New Note</label>
-             <textarea value={newNote} onChange={e => setNewNote(e.target.value)} rows={3} placeholder="Add an update or observation..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"></textarea>
+             <label htmlFor="new-note" className="block text-sm font-medium text-gray-700">Add New Note</label>
+             <textarea id="new-note" value={newNote} onChange={e => setNewNote(e.target.value)} rows={3} placeholder="Add an update or observation..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"></textarea>
           </div>
           
           {formError && <p className="mt-4 text-sm text-center text-red-600 bg-red-50 p-2 rounded-md">{formError}</p>}
