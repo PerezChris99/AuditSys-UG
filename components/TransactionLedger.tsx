@@ -19,6 +19,7 @@ const TransactionLedger: React.FC = () => {
   });
   
   const [searchParams] = useSearchParams();
+  const [riskDetails, setRiskDetails] = useState<{reason: string, score: number} | null>(null);
 
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
   const [tamperedTxId, setTamperedTxId] = useState<string | null>(null);
@@ -144,6 +145,13 @@ const TransactionLedger: React.FC = () => {
     );
   };
 
+    const getRiskColor = (score?: number): string => {
+        if (!score) return 'bg-gray-100 text-gray-800';
+        if (score > 70) return 'bg-red-100 text-red-800';
+        if (score > 40) return 'bg-yellow-100 text-yellow-800';
+        return 'bg-green-100 text-green-800';
+    };
+
   const VerificationStatus = () => {
     switch (verificationStatus) {
       case 'verifying':
@@ -233,10 +241,37 @@ const TransactionLedger: React.FC = () => {
         </div>
     );
   };
+  
+  const RiskDetailsModal = () => {
+    if (!riskDetails) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setRiskDetails(null)}>
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="flex items-start">
+                    <div className={`p-2 rounded-full mr-4 ${getRiskColor(riskDetails.score)}`}>
+                       <ShieldExclamationIcon className={`h-6 w-6 ${getRiskColor(riskDetails.score).split(' ')[1]}`}/>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">AI Fraud Risk Analysis</h3>
+                        <p className={`text-2xl font-bold ${getRiskColor(riskDetails.score).split(' ')[1]}`}>{riskDetails.score} / 100</p>
+                    </div>
+                </div>
+                <div className="mt-4 pt-4 border-t">
+                    <h4 className="font-semibold text-gray-700 mb-1">Justification:</h4>
+                    <p className="text-gray-600 text-sm">{riskDetails.reason}</p>
+                </div>
+                 <div className="mt-6 flex justify-end">
+                    <button onClick={() => setRiskDetails(null)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+  };
 
 
   return (
     <div className="bg-white p-6 rounded-lg shadow space-y-4">
+      <RiskDetailsModal />
       <h2 className="text-xl font-semibold text-gray-700 mb-2">Immutable Transaction Ledger</h2>
       <p className="text-sm text-gray-500">This is an append-only log. Each transaction is cryptographically linked to the previous one, ensuring a verifiable audit trail.</p>
       
@@ -299,6 +334,7 @@ const TransactionLedger: React.FC = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
               <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+               <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Fraud Risk</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Hash</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Previous Hash</th>
             </tr>
@@ -311,6 +347,16 @@ const TransactionLedger: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-sans">{tx.type}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{renderDetails(tx)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-700 text-right font-sans">${tx.amount.toFixed(2)}</td>
+                 <td className="px-6 py-4 whitespace-nowrap text-center">
+                    {tx.fraudScore && (
+                        <button
+                            onClick={() => setRiskDetails({ reason: tx.fraudReason || 'No details provided.', score: tx.fraudScore! })}
+                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer hover:opacity-80 ${getRiskColor(tx.fraudScore)}`}
+                        >
+                            {tx.fraudScore.toFixed(0)}
+                        </button>
+                    )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-green-600">{tx.hash.substring(0, 16)}...</td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 flex items-center">
                   {index < originalTransactions.length - 1 && tx.previousHash !== '0'.repeat(64) && <LinkIcon className="h-3 w-3 mr-2 text-gray-400" />}
@@ -319,7 +365,7 @@ const TransactionLedger: React.FC = () => {
               </tr>
             ))}
             {filteredTransactions.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-10 text-gray-500 font-sans">No transactions found for the selected filters.</td></tr>
+              <tr><td colSpan={8} className="text-center py-10 text-gray-500 font-sans">No transactions found for the selected filters.</td></tr>
             )}
           </tbody>
         </table>

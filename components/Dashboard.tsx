@@ -3,12 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { useData } from '../context/DataContext';
 import { DiscrepancyStatus } from '../types';
 import Card from './ui/Card';
-import { DollarSignIcon, TicketIcon, AgentIcon, AlertIcon } from './ui/Icons';
+import { DollarSignIcon, TicketIcon, AgentIcon, AlertIcon, ShieldExclamationIcon } from './ui/Icons';
 import { useAuth } from '../context/AuthContext';
 import AIInsights from './ui/AIInsights';
 
 const Dashboard: React.FC = () => {
-  const { agents, tickets, discrepancies } = useData();
+  const { agents, tickets, discrepancies, transactions } = useData();
   const { user } = useAuth();
 
   const isAgentRole = user?.role === 'Agent';
@@ -18,6 +18,10 @@ const Dashboard: React.FC = () => {
   const totalTickets = tickets.length;
   const totalAgents = agents.length;
   const pendingDiscrepancies = discrepancies.filter(d => d.status.includes('Pending')).length;
+
+  const avgFraudScore = transactions.length > 0
+    ? transactions.reduce((acc, tx) => acc + (tx.fraudScore || 0), 0) / transactions.length
+    : 0;
   
   const salesData = tickets
     .sort((a, b) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime())
@@ -60,6 +64,25 @@ const Dashboard: React.FC = () => {
     }, [] as Array<{ date: string } & { [key in DiscrepancyStatus]: number }>)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-30);
+    
+    const fraudScoreData = transactions
+        .slice()
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .reduce((acc, tx) => {
+            if (!tx.fraudScore) return acc;
+            const date = new Date(tx.timestamp).toISOString().substring(5, 10); // MM-DD
+            if (!acc[date]) {
+                acc[date] = { sum: 0, count: 0 };
+            }
+            acc[date].sum += tx.fraudScore;
+            acc[date].count++;
+            return acc;
+        }, {} as Record<string, { sum: number, count: number }>)
+
+    const fraudScoreChartData = Object.entries(fraudScoreData).map(([date, {sum, count}]) => ({
+        name: date,
+        score: parseFloat((sum / count).toFixed(1)),
+    })).slice(-30);
   
   return (
     <div className="space-y-6">
@@ -68,7 +91,7 @@ const Dashboard: React.FC = () => {
         <Card title={isAgentRole ? "My Tickets Sold" : "Tickets Sold"} value={totalTickets.toLocaleString()} icon={<TicketIcon />} />
         {!isAgentRole && (
           <>
-            <Card title="Active Agents" value={totalAgents.toLocaleString()} icon={<AgentIcon />} />
+            <Card title="Avg. Fraud Score" value={avgFraudScore.toFixed(1)} icon={<ShieldExclamationIcon />} />
             <Card title="Pending Discrepancies" value={pendingDiscrepancies.toLocaleString()} icon={<AlertIcon />} trend="-5%" trendDirection="down" />
           </>
         )}
@@ -92,6 +115,19 @@ const Dashboard: React.FC = () => {
         {!isAgentRole && (
             <>
             <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Fraud Risk Over Time</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={fraudScoreChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis domain={[0, 100]} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="score" stroke="#ef4444" strokeWidth={2} name="Avg. Score" activeDot={{ r: 8 }} />
+                    </LineChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Top Agents by Revenue</h3>
                 <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={agentPerformanceData}>

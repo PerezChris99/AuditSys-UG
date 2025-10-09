@@ -42,6 +42,8 @@ export interface Transaction {
   agentId: string;
   hash: string;
   previousHash: string;
+  fraudScore?: number;
+  fraudReason?: string;
 }
 
 export interface Note {
@@ -75,7 +77,7 @@ export interface User {
 export interface Notification {
   id: string;
   message: string;
-  type: 'Discrepancy' | 'Transaction Anomaly';
+  type: 'Discrepancy' | 'Transaction Anomaly' | 'High Fraud Risk';
   timestamp: string;
   isRead: boolean;
   link: string;

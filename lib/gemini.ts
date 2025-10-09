@@ -37,7 +37,7 @@ export const getAIInsights = async (recentTickets: Ticket[], recentDiscrepancies
 /**
  * Converts a natural language query into a structured filter object for ticket sales.
  */
-export const parseNaturalLanguageQuery = async (query: string): Promise<any> => {
+export const parseTicketQuery = async (query: string): Promise<any> => {
     const schema = {
         type: Type.OBJECT,
         properties: {
@@ -161,5 +161,146 @@ export const parseLedgerQuery = async (query: string, agents: Agent[]): Promise<
     } catch (error) {
         console.error("Gemini API call failed for ledger NLQ:", error);
         throw new Error("Sorry, I couldn't understand that request. Please try rephrasing it.");
+    }
+};
+
+export const getFraudScore = async (
+    transaction: Pick<Transaction, 'amount' | 'associatedRecordId' | 'agentId' | 'type'>,
+    agent: Agent,
+    recentTransactions: Transaction[]
+): Promise<{ score: number; reason: string }> => {
+    const agentRecentTxCount = recentTransactions.filter(t => t.agentId === agent.id).length;
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            score: { type: Type.NUMBER, description: 'A fraud propensity score from 1 (very low risk) to 100 (very high risk).' },
+            reason: { type: Type.STRING, description: 'A brief, one-sentence justification for the assigned score.' }
+        },
+        required: ['score', 'reason'],
+    };
+    
+    const prompt = `
+        Analyze the following new transaction for potential fraud and return a JSON object with a score and reason.
+        
+        Context:
+        - Agent Name: ${agent.name}
+        - Agent Historical Dispute Rate: ${agent.disputeRate.toFixed(2)}%
+        - Agent transaction volume in last 24h: ${agentRecentTxCount} transactions.
+        
+        New Transaction Details:
+        - Amount: $${transaction.amount.toFixed(2)}
+        - Record Type: ${transaction.associatedRecordId.split('-')[0]}
+        
+        Assign a score from 1-100. Higher scores for unusually large amounts, high agent dispute rates, or very high recent transaction volume for that agent. A typical, safe transaction should be below 40.
+    `;
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            },
+        });
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+        return {
+            score: Math.min(100, Math.max(1, parsed.score || 10)),
+            reason: parsed.reason || "AI analysis failed, defaulted to low risk.",
+        };
+    } catch (error) {
+        console.error("Gemini API call failed for fraud score:", error);
+        return {
+            score: 10,
+            reason: "AI analysis unavailable; defaulted to low risk."
+        };
+    }
+};
+
+export const analyzeDiscrepancyEvidence = async (discrepancy: Discrepancy): Promise<string> => {
+    const prompt = `
+        You are an audit assistant with multi-modal capabilities.
+        You have been given a transaction discrepancy and a (simulated) image of a bank deposit slip associated with it. 
+        Your task is to analyze the 'image' and report if the amount on the slip matches the discrepancy details.
+        
+        Discrepancy Details:
+        - ID: ${discrepancy.id}
+        - Disputed Amount: $${discrepancy.amount.toFixed(2)}
+        - Type: ${discrepancy.type}
+
+        Simulated Image Analysis:
+        The attached bank slip image clearly shows a cash deposit of **$${(discrepancy.amount + 50).toFixed(2)}**. 
+        
+        Based on this, what is your conclusion? Is there still a mismatch? Be concise.
+    `;
+    
+    try {
+         const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return `**Analysis Complete:** ${response.text}`;
+    } catch (error) {
+        console.error("Gemini API call failed for evidence analysis:", error);
+        return "Error: Could not generate evidence analysis.";
+    }
+};
+
+export const getAgentPerformanceReview = async (agent: Agent): Promise<string> => {
+    const prompt = `
+        You are a helpful and encouraging performance coach for sales agents at an aviation authority.
+        Your task is to write a brief, positive performance summary for an agent based on their data.
+        Highlight one area of success and one area for improvement with a specific, actionable tip.
+        Use markdown for formatting. Be encouraging, not punitive.
+
+        **Agent Data:**
+        - Name: ${agent.name}
+        - Tickets Sold (all time): ${agent.ticketsSold}
+        - Total Revenue (all time): $${agent.totalRevenue.toLocaleString()}
+        - Transaction Accuracy: ${agent.accuracy}%
+        - Dispute Rate: ${agent.disputeRate}%
+
+        Now, generate the performance review.
+    `;
+    
+    try {
+         const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Gemini API call failed for agent review:", error);
+        return "Error: Could not generate an AI performance review.";
+    }
+};
+
+/**
+ * Uses Google Search grounding to find an official URL related to a page title.
+ */
+export const getOfficialUrl = async (pageTitle: string): Promise<{ title: string; uri: string } | null> => {
+    const prompt = `Find the single most relevant official Ugandan Aviation Authority website URL for the following topic: "${pageTitle}"`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && chunks.length > 0 && chunks[0].web) {
+            return {
+                title: chunks[0].web.title || 'Official Resource',
+                uri: chunks[0].web.uri,
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error("Gemini API call failed for Google Search grounding:", error);
+        return null;
     }
 };

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
@@ -236,7 +237,8 @@ const Reports: React.FC = () => {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            // FIX: Corrected the type of the label function parameter to `any` to resolve type incompatibility with recharts. The library's type definitions seem to be missing the 'percent' property.
+                            label={({ name, percent }: any) => `${name}: ${(percent * 100).toFixed(0)}%`}
                             outerRadius={100}
                             fill="#8884d8"
                             dataKey="value"

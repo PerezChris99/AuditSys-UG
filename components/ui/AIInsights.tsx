@@ -21,6 +21,7 @@ const AIInsights: React.FC = () => {
 
             if (recentTickets.length === 0 && recentDiscrepancies.length === 0) {
                  setInsights('<p class="text-gray-500">No significant activity in the last 24 hours to analyze.</p>');
+                 setIsLoading(false); // Make sure to stop loading
                  return;
             }
 
@@ -29,6 +30,7 @@ const AIInsights: React.FC = () => {
             setInsights(html);
         } catch (e: any) {
             setError(e.message || 'An unknown error occurred.');
+            setInsights(''); // Clear previous insights on error
         } finally {
             setIsLoading(false);
         }

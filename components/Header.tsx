@@ -4,7 +4,8 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { Role } from '../types';
-import { UserIcon, LogoutIcon } from './ui/Icons';
+import { UserIcon, LogoutIcon, LinkIcon } from './ui/Icons';
+import { getOfficialUrl } from '../lib/gemini';
 
 const Header: React.FC = () => {
   const location = useLocation();
@@ -13,6 +14,8 @@ const Header: React.FC = () => {
   const { notifications, unreadCount, markAllAsRead } = useNotifications();
   const [isNotificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const [groundedLink, setGroundedLink] = useState<{ title: string; uri: string } | null>(null);
+  const [isGrounding, setIsGrounding] = useState(false);
   
   const notificationDropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -33,6 +36,31 @@ const Header: React.FC = () => {
     }
   };
   
+  useEffect(() => {
+    const groundTitle = async () => {
+        const title = getTitle();
+        // Don't search for generic pages that don't need external grounding
+        if (['Dashboard Overview', 'User Profile', 'Login'].includes(title)) {
+            setGroundedLink(null);
+            return;
+        }
+
+        setIsGrounding(true);
+        setGroundedLink(null);
+        try {
+            const result = await getOfficialUrl(title);
+            setGroundedLink(result);
+        } catch (error) {
+            console.error("Failed to ground title:", error);
+            setGroundedLink(null);
+        } finally {
+            setIsGrounding(false);
+        }
+    };
+
+    groundTitle();
+  }, [location.pathname]);
+
   const handleMarkAllRead = () => {
     markAllAsRead();
   };
@@ -74,14 +102,33 @@ const Header: React.FC = () => {
 
   return (
     <header className="h-20 bg-white shadow-sm flex items-center justify-between px-6 z-10">
-      <div className="flex items-center">
-        <h1 className="text-2xl font-semibold text-gray-700">{getTitle()}</h1>
-        <div className="ml-4 flex items-center space-x-2">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-            <span className="text-sm font-medium text-green-600">Live</span>
+      <div>
+        <div className="flex items-center">
+            <h1 className="text-2xl font-semibold text-gray-700">{getTitle()}</h1>
+            <div className="ml-4 flex items-center space-x-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <span className="text-sm font-medium text-green-600">Live</span>
+            </div>
+        </div>
+         <div className="h-4 mt-1"> {/* Fixed height to prevent layout shift */}
+            {isGrounding && (
+                <div className="animate-pulse h-3 bg-gray-200 rounded w-1/2"></div>
+            )}
+            {groundedLink && !isGrounding && (
+                <a 
+                    href={groundedLink.uri} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary-700 hover:underline flex items-center"
+                    title={`Visit: ${groundedLink.uri}`}
+                >
+                    <LinkIcon className="h-3 w-3 mr-1.5" />
+                    {groundedLink.title}
+                </a>
+            )}
         </div>
       </div>
       <div className="flex items-center">

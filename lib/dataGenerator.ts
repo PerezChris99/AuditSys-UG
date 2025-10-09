@@ -1,5 +1,6 @@
 import { Agent, Ticket, Transaction, TransactionStatus } from '../types';
 import { calculateHash } from './cryptoUtils';
+import { getFraudScore } from './gemini';
 
 const sampleNames = ["Amelia Earhart", "Charles Lindbergh", "Bessie Coleman", "Wright Brothers", "Chuck Yeager"];
 const sampleAirports = {
@@ -37,16 +38,25 @@ export const generateNewTicket = (agents: Agent[]): Ticket => {
     };
 };
 
-export const generateNewTransaction = async (ticket: Ticket, previousHash: string): Promise<Transaction> => {
+export const generateNewTransaction = async (
+    ticket: Ticket, 
+    previousHash: string,
+    agent: Agent,
+    recentTransactions: Transaction[]
+): Promise<Transaction> => {
     const timestamp = new Date().toISOString();
     const id = `TXN-${Date.now()}`;
     const amount = ticket.price;
     const associatedRecordId = ticket.id;
 
-    // The hash is calculated asynchronously. 
-    // For this mock, we'll use a placeholder and update it when the real hash is ready.
-    // In a real app, you might show a "pending" state.
     const hash = await calculateHash(id, timestamp, amount, associatedRecordId, previousHash);
+    
+    const { score, reason } = await getFraudScore({
+        amount,
+        associatedRecordId,
+        agentId: agent.id,
+        type: 'Sale'
+    }, agent, recentTransactions);
     
     return {
         id,
@@ -57,5 +67,7 @@ export const generateNewTransaction = async (ticket: Ticket, previousHash: strin
         agentId: ticket.agentId,
         hash,
         previousHash,
+        fraudScore: score,
+        fraudReason: reason,
     };
 };

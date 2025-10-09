@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { SparklesIcon } from './Icons';
-import { parseNaturalLanguageQuery, parseLedgerQuery } from '../../lib/gemini';
+import { parseTicketQuery, parseLedgerQuery } from '../../lib/gemini';
 import { Agent } from '../../types';
 
 interface NaturalLanguageQueryProps {
@@ -25,7 +26,7 @@ const NaturalLanguageQuery: React.FC<NaturalLanguageQueryProps> = ({ onQueryAppl
         try {
             let parsedFilters;
             if (queryType === 'tickets') {
-                parsedFilters = await parseNaturalLanguageQuery(query);
+                parsedFilters = await parseTicketQuery(query);
             } else if (queryType === 'ledger') {
                 if (!agents) {
                     throw new Error("Agent data is required for this type of query.");

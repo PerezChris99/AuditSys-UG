@@ -192,6 +192,8 @@ export const generateInitialData = () => {
             id, type: 'Sale', amount, timestamp: timestamp.toISOString(),
             associatedRecordId: ticket.id, agentId: ticket.agentId,
             hash, previousHash,
+            fraudScore: Math.floor(random() * 60) + 5, // Score from 5 to 64
+            fraudReason: 'Initial analysis based on typical transaction patterns. No significant anomalies detected.',
         });
         previousHash = hash;
     }

@@ -1,11 +1,12 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Discrepancy, DiscrepancyStatus, Note, User } from '../types';
 import StatusBadge from './ui/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { EditIcon, EmailIcon, SparklesIcon } from './ui/Icons';
+import { EditIcon, EmailIcon, SparklesIcon, FileTextIcon } from './ui/Icons';
 import MultiSelectDropdown from './ui/MultiSelectDropdown';
-import { getDiscrepancySummary } from '../lib/gemini';
+import { getDiscrepancySummary, analyzeDiscrepancyEvidence } from '../lib/gemini';
 import { marked } from 'marked';
 
 
@@ -24,6 +25,8 @@ const Discrepancies: React.FC = () => {
   // State for AI Summary
   const [aiSummary, setAiSummary] = useState('');
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [evidenceAnalysis, setEvidenceAnalysis] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // State for Email Modal
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -140,6 +143,7 @@ const Discrepancies: React.FC = () => {
     setNewNote('');
     setIsChanged(false);
     setFormError('');
+    setEvidenceAnalysis('');
     setIsModalOpen(true);
   };
 
@@ -181,6 +185,21 @@ const Discrepancies: React.FC = () => {
         setFormError(error.message);
     }
   };
+  
+    const handleAnalyzeEvidence = async () => {
+        if (!selectedDiscrepancy) return;
+        setIsAnalyzing(true);
+        setEvidenceAnalysis('');
+        try {
+            const result = await analyzeDiscrepancyEvidence(selectedDiscrepancy);
+            const html = await marked.parse(result);
+            setEvidenceAnalysis(html);
+        } catch (error) {
+            setEvidenceAnalysis('<p class="text-red-500">Could not analyze evidence.</p>');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
   
   const statusOptions = Object.values(DiscrepancyStatus);
   const typeOptions = useMemo(() => [...new Set(discrepancies.map(d => d.type))], [discrepancies]);
@@ -343,7 +362,7 @@ AuditSys UG
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-        <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl">
+        <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Manage Discrepancy: <span className="text-red-600">{selectedDiscrepancy.id}</span></h2>
           
           <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
@@ -387,6 +406,26 @@ AuditSys UG
             </div>
           </div>
           
+           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="font-semibold text-gray-700 mb-2">Evidence Analysis</h3>
+                <button 
+                    onClick={handleAnalyzeEvidence}
+                    disabled={isAnalyzing}
+                    className="mb-2 px-3 py-1.5 bg-white border border-gray-300 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-100 flex items-center disabled:opacity-50"
+                >
+                    <FileTextIcon className="h-4 w-4 mr-2" />
+                    {isAnalyzing ? 'Analyzing...' : 'Analyze Evidence'}
+                </button>
+                {isAnalyzing ? (
+                    <div className="space-y-2 animate-pulse mt-2">
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                    </div>
+                ) : evidenceAnalysis ? (
+                    <div className="prose prose-sm max-w-none text-gray-600 mt-2" dangerouslySetInnerHTML={{ __html: evidenceAnalysis }} />
+                ) : <p className="text-xs text-gray-500">Click to run AI analysis on attached evidence.</p>}
+            </div>
+
           <div className="mb-4">
             <h3 className="font-semibold text-gray-700 mb-2">Notes & History</h3>
             <div className="max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md border text-sm space-y-2">

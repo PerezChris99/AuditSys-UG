@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus, Note } from '../types';
 import { useNotifications } from './NotificationContext';
@@ -54,7 +53,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const interval = setInterval(() => {
       (async () => {
         const newTicket = generateNewTicket(agents);
-        const newTransaction = await generateNewTransaction(newTicket, transactions[0]?.hash || '0'.repeat(64));
+        const agent = agents.find(a => a.id === newTicket.agentId);
+
+        if (!agent) return;
+        
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const recentTransactions = transactions.filter(t => t.timestamp > oneDayAgo);
+
+        const newTransaction = await generateNewTransaction(
+            newTicket, 
+            transactions[0]?.hash || '0'.repeat(64),
+            agent,
+            recentTransactions
+        );
         
         setTickets(prev => [newTicket, ...prev]);
         setTransactions(prev => [newTransaction, ...prev]);
@@ -63,6 +74,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addNotification({
               message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
               type: 'Transaction Anomaly',
+              link: '/ledger',
+            });
+        }
+
+        if (newTransaction.fraudScore && newTransaction.fraudScore > 75) {
+             addNotification({
+              message: `High fraud risk transaction (${newTransaction.fraudScore}) flagged for TXN #${newTransaction.id}.`,
+              type: 'High Fraud Risk',
               link: '/ledger',
             });
         }

@@ -4,6 +4,7 @@ import { Ticket, TransactionStatus } from '../types';
 import StatusBadge from './ui/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import MultiSelectDropdown from './ui/MultiSelectDropdown';
+import NaturalLanguageQuery from './ui/NaturalLanguageQuery';
 
 const TicketSales: React.FC = () => {
   const { tickets, agents } = useData();
@@ -23,6 +24,16 @@ const TicketSales: React.FC = () => {
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({...prev, [filterName]: value}));
+  };
+
+  const handleAIQuery = (aiFilters: Partial<typeof filters>) => {
+    setFilters(prev => ({
+        ...prev,
+        ...aiFilters,
+        // Convert to strings for input fields
+        minPrice: aiFilters.minPrice !== undefined ? Number(aiFilters.minPrice) : prev.minPrice,
+        maxPrice: aiFilters.maxPrice !== undefined ? Number(aiFilters.maxPrice) : prev.maxPrice,
+    }));
   };
   
   const clearFilters = () => {
@@ -55,8 +66,8 @@ const TicketSales: React.FC = () => {
       const statusMatch = filters.statuses?.length === 0 || filters.statuses?.includes(ticket.status);
       
       const priceMatch = (!filters.minPrice || ticket.price >= filters.minPrice) && (!filters.maxPrice || ticket.price <= filters.maxPrice);
-      const originMatch = !filters.origin || ticket.origin.toLowerCase() === filters.origin.toLowerCase();
-      const destinationMatch = !filters.destination || ticket.destination.toLowerCase() === filters.destination.toLowerCase();
+      const originMatch = !filters.origin || ticket.origin.toLowerCase().includes(filters.origin.toLowerCase());
+      const destinationMatch = !filters.destination || ticket.destination.toLowerCase().includes(filters.destination.toLowerCase());
 
       return searchMatch && dateMatch && statusMatch && priceMatch && originMatch && destinationMatch;
     });
@@ -70,6 +81,8 @@ const TicketSales: React.FC = () => {
     <div className="bg-white p-6 rounded-lg shadow space-y-4">
        <h2 className="text-xl font-semibold text-gray-700">{isAgentRole ? "My Ticket Sales" : "All Ticket Sales"}</h2>
       
+      <NaturalLanguageQuery onQueryApplied={handleAIQuery} queryType="tickets" />
+
        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div className="lg:col-span-2">

@@ -1,15 +1,47 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Agent } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { getAgentPerformanceReview } from '../lib/gemini';
+import { marked } from 'marked';
+import { SparklesIcon } from './ui/Icons';
+
 
 const AgentPerformance: React.FC = () => {
   const { agents: mockAgents } = useData();
   const navigate = useNavigate();
 
+  const [isReviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewContent, setReviewContent] = useState('');
+  const [isReviewLoading, setReviewLoading] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
   const handleViewTransactions = (agentId: string) => {
     navigate(`/ledger?agentId=${agentId}`);
+  };
+
+  const handleGenerateReview = async (agent: Agent) => {
+    setSelectedAgent(agent);
+    setReviewModalOpen(true);
+    setReviewLoading(true);
+    setReviewContent('');
+    try {
+        const review = await getAgentPerformanceReview(agent);
+        const html = await marked.parse(review);
+        setReviewContent(html);
+    } catch (error) {
+        setReviewContent('<p class="text-red-500">Could not generate AI review.</p>');
+    } finally {
+        setReviewLoading(false);
+    }
+  };
+
+  const closeReviewModal = () => {
+    setReviewModalOpen(false);
+    setSelectedAgent(null);
+    setReviewContent('');
   };
 
   // Mock data for "Tickets Sold Over Time"
@@ -30,9 +62,36 @@ const AgentPerformance: React.FC = () => {
   
   const COLORS = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
 
+  const ReviewModal = () => {
+    if (!isReviewModalOpen || !selectedAgent) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800">AI Performance Review: <span className="text-primary-700">{selectedAgent.name}</span></h2>
+                {isReviewLoading ? (
+                     <div className="space-y-3 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                        <div className="h-4 bg-gray-200 rounded w-3/4 mt-4"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                ) : (
+                    <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: reviewContent }} />
+                )}
+                <div className="mt-6 flex justify-end">
+                    <button onClick={closeReviewModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+  };
+
 
   return (
     <div className="space-y-6">
+      <ReviewModal />
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Agent Performance Metrics</h2>
         <div className="overflow-x-auto">
@@ -47,6 +106,7 @@ const AgentPerformance: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Accuracy</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Dispute Rate</th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">AI Review</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -80,6 +140,15 @@ const AgentPerformance: React.FC = () => {
                       View Transactions
                     </button>
                   </td>
+                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                    <button
+                      onClick={() => handleGenerateReview(agent)}
+                      className="text-primary-600 hover:text-primary-900 font-semibold flex items-center justify-center mx-auto"
+                    >
+                      <SparklesIcon className="h-4 w-4 mr-1" />
+                      Generate
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -110,7 +179,8 @@ const AgentPerformance: React.FC = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }) => `${name.split(' ')[0]}: ${(percent * 100).toFixed(0)}%`}
+                        // FIX: Corrected the type of the label function parameter to `any` to resolve type incompatibility with recharts. The library's type definitions seem to be missing the 'percent' property.
+                        label={({ name, percent }: any) => `${name.split(' ')[0]}: ${(percent * 100).toFixed(0)}%`}
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
