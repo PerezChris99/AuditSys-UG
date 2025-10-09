@@ -13,6 +13,7 @@ interface DataContextType {
   discrepancies: Discrepancy[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   updateDiscrepancy: (id: string, updatedDiscrepancy: Discrepancy) => void;
+  generateDataPoint: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -49,71 +50,73 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
+  const generateDataPoint = useCallback(async () => {
+    const newTicket = generateNewTicket(agents);
+    const agent = agents.find(a => a.id === newTicket.agentId);
+
+    if (!agent) return;
+    
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recentTransactions = transactions.filter(t => t.timestamp > oneDayAgo);
+
+    const newTransaction = await generateNewTransaction(
+        newTicket, 
+        transactions[0]?.hash || '0'.repeat(64),
+        agent,
+        recentTransactions
+    );
+    
+    setTickets(prev => [newTicket, ...prev]);
+    setTransactions(prev => [newTransaction, ...prev]);
+
+    if (newTransaction.amount > settings.transactionThreshold) {
+        addNotification({
+          message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
+          type: 'Transaction Anomaly',
+          link: '/ledger',
+        });
+    }
+
+    if (newTransaction.fraudScore && newTransaction.fraudScore > 75) {
+         addNotification({
+          message: `High fraud risk transaction (${newTransaction.fraudScore}) flagged for TXN #${newTransaction.id}.`,
+          type: 'High Fraud Risk',
+          link: '/ledger',
+        });
+    }
+    
+    if (Math.random() < 0.1) { // 10% chance to create a discrepancy
+      const newDiscrepancy: Discrepancy = {
+        id: `DIS-${Date.now()}`,
+        type: 'Unaccounted Fee',
+        details: `Unaccounted fee related to transaction ${newTransaction.id}`,
+        amount: Math.floor(Math.random() * 50) + 10,
+        associatedTransactionId: newTransaction.id,
+        reportedAt: new Date().toISOString(),
+        status: DiscrepancyStatus.ActionRequired,
+        notes: [{
+            id: `note-${Date.now()}`,
+            content: 'System automatically flagged this discrepancy.',
+            author: 'System',
+            timestamp: new Date().toISOString(),
+        }]
+      };
+      setDiscrepancies(prev => [newDiscrepancy, ...prev]);
+      addNotification({
+          message: `New high-priority discrepancy #${newDiscrepancy.id} flagged.`,
+          type: 'Discrepancy',
+          link: '/discrepancies',
+      });
+    }
+  }, [addNotification, agents, transactions, settings.transactionThreshold]);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      (async () => {
-        const newTicket = generateNewTicket(agents);
-        const agent = agents.find(a => a.id === newTicket.agentId);
-
-        if (!agent) return;
-        
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const recentTransactions = transactions.filter(t => t.timestamp > oneDayAgo);
-
-        const newTransaction = await generateNewTransaction(
-            newTicket, 
-            transactions[0]?.hash || '0'.repeat(64),
-            agent,
-            recentTransactions
-        );
-        
-        setTickets(prev => [newTicket, ...prev]);
-        setTransactions(prev => [newTransaction, ...prev]);
-
-        if (newTransaction.amount > settings.transactionThreshold) {
-            addNotification({
-              message: `Significant transaction #${newTransaction.id} for $${newTransaction.amount.toFixed(2)}.`,
-              type: 'Transaction Anomaly',
-              link: '/ledger',
-            });
-        }
-
-        if (newTransaction.fraudScore && newTransaction.fraudScore > 75) {
-             addNotification({
-              message: `High fraud risk transaction (${newTransaction.fraudScore}) flagged for TXN #${newTransaction.id}.`,
-              type: 'High Fraud Risk',
-              link: '/ledger',
-            });
-        }
-        
-        if (Math.random() < 0.1) { // 10% chance to create a discrepancy
-          const newDiscrepancy: Discrepancy = {
-            id: `DIS-${Date.now()}`,
-            type: 'Unaccounted Fee',
-            details: `Unaccounted fee related to transaction ${newTransaction.id}`,
-            amount: Math.floor(Math.random() * 50) + 10,
-            associatedTransactionId: newTransaction.id,
-            reportedAt: new Date().toISOString(),
-            status: DiscrepancyStatus.ActionRequired,
-            notes: [{
-                id: `note-${Date.now()}`,
-                content: 'System automatically flagged this discrepancy.',
-                author: 'System',
-                timestamp: new Date().toISOString(),
-            }]
-          };
-          setDiscrepancies(prev => [newDiscrepancy, ...prev]);
-          addNotification({
-              message: `New high-priority discrepancy #${newDiscrepancy.id} flagged.`,
-              type: 'Discrepancy',
-              link: '/discrepancies',
-          });
-        }
-      })();
+      generateDataPoint();
     }, settings.simulationInterval);
 
     return () => clearInterval(interval);
-  }, [addNotification, agents, transactions, settings.simulationInterval, settings.transactionThreshold]);
+  }, [settings.simulationInterval, generateDataPoint]);
 
   // Filter data based on user role
   const getFilteredData = useCallback(() => {
@@ -139,7 +142,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [user, agents, tickets, transactions, discrepancies]);
 
-  const value = { ...getFilteredData(), setTransactions, updateDiscrepancy };
+  const value = { ...getFilteredData(), setTransactions, updateDiscrepancy, generateDataPoint };
 
   return (
     <DataContext.Provider value={value}>

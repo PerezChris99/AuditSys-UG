@@ -1,12 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../context/SettingsContext';
+import { useData } from '../../context/DataContext';
 
 const SystemSettings: React.FC = () => {
     const { settings, updateSettings } = useSettings();
+    const { generateDataPoint } = useData();
     const [localSettings, setLocalSettings] = useState(settings);
     const [errors, setErrors] = useState({ transactionThreshold: '', form: '' });
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generateStatus, setGenerateStatus] = useState<'idle' | 'success'>('idle');
     const isFormValid = !errors.transactionThreshold;
 
     useEffect(() => {
@@ -54,10 +57,24 @@ const SystemSettings: React.FC = () => {
         }
     };
 
+    const handleManualGenerate = async () => {
+        setIsGenerating(true);
+        setGenerateStatus('idle');
+        try {
+            await generateDataPoint();
+            setGenerateStatus('success');
+            setTimeout(() => setGenerateStatus('idle'), 2000);
+        } catch (error) {
+            console.error("Manual generation failed:", error);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">General Settings</h2>
+                <h2 className="text-xl font-semibold text-gray-700 mb-4">System Configuration</h2>
                 <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
                     <div>
                         <label htmlFor="transactionThreshold" className="block text-sm font-medium text-gray-700">
@@ -130,6 +147,25 @@ const SystemSettings: React.FC = () => {
                         )}
                     </div>
                 </form>
+
+                <div className="border-t mt-8 pt-6 max-w-2xl">
+                    <h3 className="text-lg font-medium text-gray-900">Manual Data Actions</h3>
+                    <p className="text-xs text-gray-500 mb-2">Manually generate a single new ticket and its associated transaction. This is useful for testing or demonstration.</p>
+                    <div className="flex items-center space-x-4">
+                        <button
+                            type="button"
+                            onClick={handleManualGenerate}
+                            disabled={isGenerating}
+                            className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed"
+                        >
+                            {isGenerating ? 'Generating...' : 'Generate New Transaction'}
+                        </button>
+                        {generateStatus === 'success' && (
+                            <span className="text-green-600 font-medium text-sm">New transaction generated successfully!</span>
+                        )}
+                    </div>
+                </div>
+
             </div>
         </div>
     );

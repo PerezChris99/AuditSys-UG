@@ -1,5 +1,8 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { 
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+    LineChart, Line, ScatterChart, Scatter, ZAxis, Treemap 
+} from 'recharts';
 import { useData } from '../context/DataContext';
 import { DiscrepancyStatus } from '../types';
 import Card from './ui/Card';
@@ -83,7 +86,95 @@ const Dashboard: React.FC = () => {
         name: date,
         score: parseFloat((sum / count).toFixed(1)),
     })).slice(-30);
-  
+
+    // Data for new charts
+    const agentCorrelationData = agents.map(agent => ({
+        x: agent.accuracy,
+        y: agent.disputeRate,
+        z: agent.totalRevenue,
+        name: agent.name,
+    }));
+
+    const destinationRevenueData = tickets.reduce((acc, ticket) => {
+        if (ticket.status === 'Completed') {
+            const destination = ticket.destination;
+            acc[destination] = (acc[destination] || 0) + ticket.price;
+        }
+        return acc;
+    }, {} as Record<string, number>);
+
+    const treemapData = Object.entries(destinationRevenueData)
+      .map(([name, size]) => ({ name, size }))
+      .sort((a, b) => b.size - a.size);
+
+
+    // Custom components for new charts
+    const CustomScatterTooltip = ({ active, payload }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-white p-2 border border-gray-300 rounded shadow-lg text-sm">
+                    <p className="font-bold text-gray-800">{data.name}</p>
+                    <p>Accuracy: <span className="font-medium">{data.x.toFixed(1)}%</span></p>
+                    <p>Dispute Rate: <span className="font-medium">{data.y.toFixed(1)}%</span></p>
+                    <p>Revenue: <span className="font-medium">${data.z.toLocaleString()}</span></p>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const TREEMAP_COLORS = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+    
+    // FIX: Converted the class component to a functional component to resolve an issue where 'this.props' was not being recognized.
+    const CustomizedTreemapContent = (props: any) => {
+        const { x, y, width, height, index, name, size } = props;
+
+        // Don't render text if the box is too small
+        if (width < 35 || height < 35) {
+            return null;
+        }
+    
+        return (
+            <g>
+                <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    style={{
+                        fill: TREEMAP_COLORS[index % TREEMAP_COLORS.length],
+                        stroke: '#fff',
+                        strokeWidth: 2,
+                    }}
+                />
+                <text
+                    x={x + width / 2}
+                    y={y + height / 2}
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize={14}
+                    fontWeight="bold"
+                    style={{ pointerEvents: 'none' }}
+                >
+                    {name}
+                </text>
+                 <text
+                    x={x + width / 2}
+                    y={y + height / 2 + 18}
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize={12}
+                    opacity={0.8}
+                    style={{ pointerEvents: 'none' }}
+                >
+                    ${(size / 1000).toFixed(0)}k
+                </text>
+            </g>
+        );
+    };
+
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -156,6 +247,38 @@ const Dashboard: React.FC = () => {
                 </BarChart>
                 </ResponsiveContainer>
             </div>
+            
+            {/* New Charts Start Here */}
+            <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Agent Accuracy vs. Dispute Rate</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                    <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
+                        <CartesianGrid />
+                        <XAxis type="number" dataKey="x" name="Accuracy" unit="%" domain={['dataMin - 0.5', 'dataMax + 0.5']} tickFormatter={(tick) => `${tick}%`}/>
+                        <YAxis type="number" dataKey="y" name="Dispute Rate" unit="%" tickFormatter={(tick) => `${tick}%`}/>
+                        <ZAxis type="number" dataKey="z" range={[60, 400]} name="Revenue" unit="$" />
+                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomScatterTooltip />} />
+                        <Legend />
+                        <Scatter name="Agent Performance" data={agentCorrelationData} fill="#1d4ed8" />
+                    </ScatterChart>
+                </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Revenue by Destination</h3>
+                 <ResponsiveContainer width="100%" height={300}>
+                    <Treemap
+                        data={treemapData}
+                        dataKey="size"
+                        ratio={4 / 3}
+                        stroke="#fff"
+                        content={<CustomizedTreemapContent />}
+                    >
+                        <Tooltip formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}/>
+                    </Treemap>
+                </ResponsiveContainer>
+            </div>
+            {/* New Charts End Here */}
           </>
         )}
       </div>
