@@ -1,10 +1,11 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
-import { Discrepancy, DiscrepancyStatus, Note, User, Ticket, Transaction } from '../../types';
+import { Discrepancy, DiscrepancyStatus, Note, User, Ticket, Transaction, TaskPriority } from '../../types';
 import StatusBadge from './ui/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import { EditIcon, EmailIcon, FileTextIcon } from './ui/Icons';
+import { EditIcon, EmailIcon, FileTextIcon, TaskIcon } from './ui/Icons';
 import MultiSelectDropdown from './ui/MultiSelectDropdown';
 import { analyzeDiscrepancyEvidence } from '../lib/gemini';
 import { marked } from 'marked';
@@ -12,8 +13,9 @@ import { marked } from 'marked';
 
 const Discrepancies: React.FC = () => {
   // FIX: Removed `users: allUsers` from destructuring. `users` are correctly provided by `useAuth`.
-  const { discrepancies, updateDiscrepancy, transactions, tickets } = useData();
-  const { user, users } = useAuth();
+  const { discrepancies, updateDiscrepancy, transactions, tickets, openTaskModal } = useData();
+  // FIX: Added `roles` from useAuth to correctly filter users by role.
+  const { user, users, roles } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDiscrepancy, setSelectedDiscrepancy] = useState<Discrepancy | null>(null);
@@ -44,11 +46,18 @@ const Discrepancies: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  const canManage = user?.role === 'Administrator' || user?.role === 'Auditor' || user?.role === 'Finance Officer';
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const canManage = useMemo(() => {
+    if (!user) return false;
+    return ['Administrator', 'Auditor', 'Finance Officer'].includes(user.role.name);
+  }, [user]);
 
+  // FIX: Property 'role' does not exist on type 'User'. Filtered by role name using roleId.
   const managementUsers = useMemo(() => {
-    return users.filter(u => ['Administrator', 'Auditor', 'Finance Officer'].includes(u.role));
-  }, [users]);
+    const managementRoleNames = ['Administrator', 'Auditor', 'Finance Officer'];
+    const managementRoleIds = roles.filter(role => managementRoleNames.includes(role.name)).map(r => r.id);
+    return users.filter(u => managementRoleIds.includes(u.roleId));
+  }, [users, roles]);
   
   const getUserName = (userId: string) => users.find(u => u.id === userId)?.username || 'Unassigned';
 
@@ -348,6 +357,17 @@ AuditSys UG
         return { transaction, ticket };
     }, [selectedDiscrepancy, transactions, tickets]);
 
+    const handleCreateTask = () => {
+        if (!selectedDiscrepancy) return;
+        openTaskModal({
+            title: `Investigate Discrepancy: ${selectedDiscrepancy.id}`,
+            description: `Follow up on the ${selectedDiscrepancy.type} of $${selectedDiscrepancy.amount.toFixed(2)} reported on ${new Date(selectedDiscrepancy.reportedAt).toLocaleDateString()}.`,
+            relatedDiscrepancyId: selectedDiscrepancy.id,
+            priority: TaskPriority.Medium,
+            assigneeId: selectedDiscrepancy.assigneeId || '',
+        });
+    };
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -389,7 +409,7 @@ AuditSys UG
                 <label className="block text-sm font-medium text-gray-700">Assign To</label>
                 <select value={newAssigneeId} onChange={e => setNewAssigneeId(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500">
                   <option value="">Unassigned</option>
-                  {managementUsers.map(u => <option key={u.id} value={u.id}>{u.username} ({u.role})</option>)}
+                  {managementUsers.map(u => <option key={u.id} value={u.id}>{u.username} ({getRoleName(u.roleId)})</option>)}
                 </select>
               </div>
             </div>
@@ -439,10 +459,14 @@ AuditSys UG
           {formError && <p className="mt-4 text-sm text-center text-red-600 bg-red-50 p-2 rounded-md">{formError}</p>}
 
           <div className="mt-6 flex justify-between items-center">
-            <div>
-                <button type="button" onClick={openEmailModal} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 flex items-center font-semibold">
+            <div className="flex space-x-2">
+                <button type="button" onClick={openEmailModal} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 flex items-center font-semibold text-sm">
                     <EmailIcon className="h-4 w-4 mr-2"/>
-                    Email Details
+                    Email
+                </button>
+                 <button type="button" onClick={handleCreateTask} className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 flex items-center font-semibold text-sm">
+                    <TaskIcon className="h-4 w-4 mr-2"/>
+                    Create Task
                 </button>
             </div>
             <div className="space-x-3">
@@ -505,6 +529,7 @@ AuditSys UG
     );
   };
 
+  const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown Role';
 
   return (
     <>

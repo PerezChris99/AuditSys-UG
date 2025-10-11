@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
@@ -37,8 +38,10 @@ const TransactionLedger: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  const canVerify = user?.role === 'Administrator' || user?.role === 'Auditor';
-  const canTamper = user?.role === 'Administrator';
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const canVerify = useMemo(() => ['Administrator', 'Auditor'].includes(user?.role.name || ''), [user]);
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const canTamper = user?.role.name === 'Administrator';
 
 
   useEffect(() => {

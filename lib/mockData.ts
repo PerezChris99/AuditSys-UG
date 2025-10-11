@@ -1,4 +1,4 @@
-import { Agent, Ticket, Transaction, Discrepancy, TransactionStatus, DiscrepancyStatus, Note } from '../types';
+import { Agent, Ticket, Transaction, Discrepancy, TransactionStatus, DiscrepancyStatus, Note, Task, TaskStatus, TaskPriority } from '../types';
 import { calculateHash } from './cryptoUtils';
 
 // Using a seeded random number generator for consistency
@@ -159,11 +159,45 @@ const generateDiscrepancies = (count: number, transactions: Transaction[]): Disc
     return discrepancies;
 };
 
+const generateTasks = (count: number, discrepancies: Discrepancy[]): Task[] => {
+    const tasks: Task[] = [];
+    const statuses = Object.values(TaskStatus);
+    const priorities = Object.values(TaskPriority);
+    const assignees = ['user-auditor', 'user-finance', 'user-admin'];
+    const titles = [
+        'Review transaction logs for flight UG123',
+        'Verify deposit slip against sales records',
+        'Contact agent regarding price mismatch',
+        'Reconcile daily sales report',
+        'Follow up on unaccounted fee',
+    ];
+
+    for (let i = 0; i < count; i++) {
+        const relatedDiscrepancy = random() > 0.5 ? discrepancies[Math.floor(random() * discrepancies.length)] : undefined;
+        const createdAt = new Date(Date.now() - random() * 1000 * 3600 * 24 * 14); // Within last 2 weeks
+        const dueDate = new Date(createdAt.getTime() + 1000 * 3600 * 24 * 7);
+
+        tasks.push({
+            id: `TASK-${Date.now() - i * 70000}`,
+            title: relatedDiscrepancy ? `Investigate Discrepancy ${relatedDiscrepancy.id.substring(0,8)}...` : titles[i % titles.length],
+            description: `Detailed investigation required for potential financial inconsistencies. Please review all associated documents.`,
+            status: statuses[Math.floor(random() * statuses.length)],
+            priority: priorities[Math.floor(random() * priorities.length)],
+            assigneeId: assignees[Math.floor(random() * assignees.length)],
+            createdAt: createdAt.toISOString(),
+            dueDate: random() > 0.3 ? dueDate.toISOString().split('T')[0] : undefined,
+            relatedDiscrepancyId: relatedDiscrepancy?.id,
+        });
+    }
+    return tasks;
+};
+
 let cachedData: {
     agents: Agent[],
     tickets: Ticket[],
     transactions: Transaction[],
     discrepancies: Discrepancy[],
+    tasks: Task[],
 } | null = null;
 
 // This function generates the initial data set.
@@ -201,7 +235,8 @@ export const generateInitialData = () => {
 
 
     const discrepancies = generateDiscrepancies(20, transactions);
+    const tasks = generateTasks(15, discrepancies);
 
-    cachedData = { agents, tickets, transactions, discrepancies };
+    cachedData = { agents, tickets, transactions, discrepancies, tasks };
     return cachedData;
 };

@@ -10,6 +10,39 @@ export enum DiscrepancyStatus {
   ActionRequired = 'Action Required',
 }
 
+export enum TaskStatus {
+  ToDo = 'To Do',
+  InProgress = 'In Progress',
+  Completed = 'Completed',
+}
+
+export enum TaskPriority {
+  Low = 'Low',
+  Medium = 'Medium',
+  High = 'High',
+}
+
+export type Permission =
+  | 'view_dashboard'
+  | 'view_ticket_sales'
+  | 'view_agent_performance'
+  | 'manage_discrepancies'
+  | 'view_transaction_ledger'
+  | 'generate_reports'
+  | 'manage_tasks'
+  | 'manage_users'
+  | 'manage_roles'
+  | 'manage_system_settings'
+  | 'view_own_data_only';
+
+export interface Role {
+    id: string;
+    name: string;
+    description: string;
+    permissions: Permission[];
+    isDefault?: boolean; // To prevent deletion of core roles
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -65,12 +98,22 @@ export interface Discrepancy {
   notes?: Note[];
 }
 
-export type Role = 'Administrator' | 'Viewer' | 'Auditor' | 'Finance Officer' | 'Agent';
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assigneeId: string; // User ID
+  dueDate?: string;
+  relatedDiscrepancyId?: string;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
   username: string;
-  role: Role;
+  roleId: string;
   agent?: Agent;
 }
 

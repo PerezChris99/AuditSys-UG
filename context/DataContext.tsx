@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus, Note } from '../types';
+import { Agent, Ticket, Transaction, Discrepancy, Role, User, DiscrepancyStatus, Note, Task, TaskStatus } from '../types';
 import { useNotifications } from './NotificationContext';
 import { useAuth } from './AuthContext';
 import { generateInitialData } from '../lib/mockData';
@@ -11,9 +12,16 @@ interface DataContextType {
   tickets: Ticket[];
   transactions: Transaction[];
   discrepancies: Discrepancy[];
+  tasks: Task[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   updateDiscrepancy: (id: string, updatedDiscrepancy: Discrepancy) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
+  updateTask: (taskId: string, updates: Partial<Omit<Task, 'id'>>) => void;
   generateDataPoint: () => Promise<void>;
+  isTaskModalOpen: boolean;
+  openTaskModal: (initialData?: Partial<Task>) => void;
+  closeTaskModal: () => void;
+  taskInitialData: Partial<Task> | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -23,6 +31,7 @@ const {
   tickets: initialTickets,
   transactions: initialTransactions,
   discrepancies: initialDiscrepancies,
+  tasks: initialTasks,
 } = generateInitialData();
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -30,9 +39,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>(initialDiscrepancies);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const { addNotification } = useNotifications();
   const { user } = useAuth();
   const { settings } = useSettings();
+
+  // Task Modal State
+  const [isTaskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskInitialData, setTaskInitialData] = useState<Partial<Task> | null>(null);
+
+  const openTaskModal = (initialData?: Partial<Task>) => {
+    setTaskInitialData(initialData || null);
+    setTaskModalOpen(true);
+  };
+  const closeTaskModal = () => {
+    setTaskInitialData(null);
+    setTaskModalOpen(false);
+  };
+
 
   const updateDiscrepancy = useCallback((id: string, updatedDiscrepancy: Discrepancy) => {
     const isValidStatus = Object.values(DiscrepancyStatus).includes(updatedDiscrepancy.status);
@@ -48,6 +72,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         newDiscrepancies[index] = updatedDiscrepancy;
         return newDiscrepancies;
     });
+  }, []);
+
+  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt'>) => {
+    const newTask: Task = {
+        ...taskData,
+        id: `TASK-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        status: taskData.status || TaskStatus.ToDo,
+    };
+    setTasks(prev => [newTask, ...prev]);
+  }, []);
+
+  const updateTask = useCallback((taskId: string, updates: Partial<Omit<Task, 'id'>>) => {
+      setTasks(prev => prev.map(task => 
+          task.id === taskId ? { ...task, ...updates } : task
+      ));
   }, []);
 
   const generateDataPoint = useCallback(async () => {
@@ -120,12 +160,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Filter data based on user role
   const getFilteredData = useCallback(() => {
-    if (user?.role !== 'Agent' || !user.agent) {
+    // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+    if (user?.role.name !== 'Agent' || !user.agent) {
       return {
         agents,
         tickets,
         transactions,
         discrepancies,
+        tasks,
       };
     }
     
@@ -133,16 +175,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const agentTickets = tickets.filter(t => t.agentId === agentId);
     const agentTransactions = transactions.filter(t => t.agentId === agentId);
     const agentDiscrepancies = discrepancies.filter(d => agentTransactions.some(t => t.id === d.associatedTransactionId));
+    
+    // Agents don't see tasks
+    const userTasks = tasks.filter(t => t.assigneeId === user.id);
+
 
     return {
       agents, // Still need all agents for lookups
       tickets: agentTickets,
       transactions: agentTransactions,
       discrepancies: agentDiscrepancies,
+      tasks, // Return all tasks for now, filtering will happen on the page
     };
-  }, [user, agents, tickets, transactions, discrepancies]);
+  }, [user, agents, tickets, transactions, discrepancies, tasks]);
 
-  const value = { ...getFilteredData(), setTransactions, updateDiscrepancy, generateDataPoint };
+  const value = { 
+    ...getFilteredData(), 
+    setTransactions, 
+    updateDiscrepancy, 
+    generateDataPoint,
+    addTask,
+    updateTask,
+    isTaskModalOpen,
+    openTaskModal,
+    closeTaskModal,
+    taskInitialData,
+  };
 
   return (
     <DataContext.Provider value={value}>

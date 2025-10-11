@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter, Route, Routes, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -17,8 +16,11 @@ import { NotificationProvider } from './context/NotificationContext';
 import Profile from './components/Profile';
 import ManageUsers from './components/admin/ManageUsers';
 import SystemSettings from './components/admin/SystemSettings';
+import ManageRoles from './components/admin/ManageRoles';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AlertIcon } from './components/ui/Icons';
+import Tasks from './components/tasks/Tasks';
+import TaskModal from './components/tasks/TaskModal';
 
 const MaintenanceBanner = () => {
     const { settings } = useSettings();
@@ -42,42 +44,61 @@ const AppContent: React.FC = () => {
           <MaintenanceBanner />
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={
+                  <ProtectedRoute requiredPermission="view_dashboard">
+                    <Dashboard />
+                  </ProtectedRoute>
+              } />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/tickets" element={<TicketSales />} />
+              <Route path="/tickets" element={
+                  <ProtectedRoute requiredPermission="view_ticket_sales">
+                    <TicketSales />
+                  </ProtectedRoute>
+              } />
               <Route path="/agents" element={
-                <ProtectedRoute allowedRoles={['Administrator', 'Auditor']}>
+                <ProtectedRoute requiredPermission="view_agent_performance">
                   <AgentPerformance />
                 </ProtectedRoute>
               } />
               <Route path="/discrepancies" element={
-                <ProtectedRoute allowedRoles={['Administrator', 'Auditor', 'Finance Officer']}>
+                <ProtectedRoute requiredPermission="manage_discrepancies">
                   <Discrepancies />
                 </ProtectedRoute>
               } />
+               <Route path="/tasks" element={
+                <ProtectedRoute requiredPermission="manage_tasks">
+                  <Tasks />
+                </ProtectedRoute>
+              } />
               <Route path="/reports" element={
-                <ProtectedRoute allowedRoles={['Administrator', 'Auditor', 'Finance Officer', 'Viewer']}>
+                <ProtectedRoute requiredPermission="generate_reports">
                   <Reports />
                 </ProtectedRoute>
               } />
               <Route path="/ledger" element={
-                <ProtectedRoute allowedRoles={['Administrator', 'Auditor', 'Finance Officer']}>
+                <ProtectedRoute requiredPermission="view_transaction_ledger">
                   <TransactionLedger />
                 </ProtectedRoute>
               } />
               <Route path="/admin/users" element={
-                <ProtectedRoute allowedRoles={['Administrator']}>
+                <ProtectedRoute requiredPermission="manage_users">
                   <ManageUsers />
                 </ProtectedRoute>
               } />
+              <Route path="/admin/roles" element={
+                <ProtectedRoute requiredPermission="manage_roles">
+                  <ManageRoles />
+                </ProtectedRoute>
+              } />
               <Route path="/admin/settings" element={
-                <ProtectedRoute allowedRoles={['Administrator']}>
+                <ProtectedRoute requiredPermission="manage_system_settings">
                     <SystemSettings />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
+          <TaskModal />
         </div>
       </div>
     </DataProvider>

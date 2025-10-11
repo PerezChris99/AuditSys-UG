@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
@@ -24,7 +25,11 @@ const Reports: React.FC = () => {
     end: today,
   });
 
-  const canSeeAgentReports = user?.role === 'Administrator' || user?.role === 'Auditor' || user?.role === 'Viewer';
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const canSeeAgentReports = useMemo(() => {
+    if (!user) return false;
+    return ['Administrator', 'Auditor', 'Viewer'].includes(user.role.name);
+  }, [user]);
 
   const transactionTypes = useMemo(() => ['All', ...Array.from(new Set(transactions.map(tx => tx.type)))], [transactions]);
 

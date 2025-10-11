@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Ticket, TransactionStatus } from '../types';
@@ -10,7 +11,8 @@ import NaturalLanguageQuery from './ui/NaturalLanguageQuery';
 const TicketSales: React.FC = () => {
   const { tickets, agents } = useData();
   const { user } = useAuth();
-  const isAgentRole = user?.role === 'Agent';
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const isAgentRole = user?.role.name === 'Agent';
 
   const [filters, setFilters] = useState({
     searchTerm: '',

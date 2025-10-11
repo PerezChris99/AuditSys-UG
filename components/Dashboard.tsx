@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -14,7 +15,8 @@ const Dashboard: React.FC = () => {
   const { agents, tickets, discrepancies, transactions } = useData();
   const { user } = useAuth();
 
-  const isAgentRole = user?.role === 'Agent';
+  // FIX: This comparison appears to be unintentional because the types 'Role' and 'string' have no overlap.
+  const isAgentRole = user?.role.name === 'Agent';
   
   // Data is pre-filtered from the DataContext if user is an agent
   const totalRevenue = tickets.reduce((acc, ticket) => acc + ticket.price, 0);

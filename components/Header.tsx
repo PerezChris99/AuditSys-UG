@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { Role } from '../types';
 import { UserIcon, LogoutIcon, LinkIcon } from './ui/Icons';
 import { getOfficialUrl } from '../lib/gemini';
 
@@ -28,9 +26,11 @@ const Header: React.FC = () => {
       case '/tickets': return 'Real-Time Ticket Sales';
       case '/agents': return 'Agent Performance Monitoring';
       case '/discrepancies': return 'Automated Discrepancy Flagging';
+      case '/tasks': return 'Task Management Board';
       case '/reports': return 'Generate Reports';
       case '/ledger': return 'Immutable Transaction Ledger';
       case '/admin/users': return 'Manage Users';
+      case '/admin/roles': return 'Manage Roles & Permissions';
       case '/admin/settings': return 'System Settings';
       default: return 'Dashboard';
     }
@@ -186,7 +186,7 @@ const Header: React.FC = () => {
                     <img className="h-8 w-8 rounded-full object-cover" src={user.agent?.avatarUrl || `https://i.pravatar.cc/100?u=${user.username}`} alt="User" />
                     <div className="ml-3 text-left">
                         <p className="text-sm font-medium text-gray-700">{user.agent?.name || user.username}</p>
-                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                        <p className="text-xs text-gray-500 capitalize">{user.role.name}</p>
                     </div>
                      <svg className="ml-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />

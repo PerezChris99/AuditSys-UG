@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Role } from '../../types';
-import { EditIcon, TrashIcon, UserIcon, LoginIcon, LogoutIcon, FileTextIcon, KeyIcon } from '../ui/Icons';
+import { User } from '../../types';
+import { EditIcon, TrashIcon, UserIcon, LoginIcon, LogoutIcon, FileTextIcon, KeyIcon, SearchIcon } from '../ui/Icons';
 
 type ActivityLog = {
     id: string;
@@ -11,17 +11,18 @@ type ActivityLog = {
 };
 
 const ManageUsers: React.FC = () => {
-    const { user: currentUser, users, addUser, updateUser, deleteUser } = useAuth();
+    const { user: currentUser, users, roles, addUser, updateUser, deleteUser } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [formData, setFormData] = useState({
         username: '',
         password: '',
-        role: 'Agent' as Role,
+        roleId: '',
     });
     const [errors, setErrors] = useState({
         username: '',
         password: '',
+        roleId: '',
         form: '',
     });
     const [searchTerm, setSearchTerm] = useState('');
@@ -29,7 +30,7 @@ const ManageUsers: React.FC = () => {
     const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
 
     const validate = (fieldData: typeof formData) => {
-        const newErrors = { username: '', password: '', form: '' };
+        const newErrors = { username: '', password: '', roleId: '', form: '' };
         if (!fieldData.username.trim()) {
             newErrors.username = 'Username is required.';
         } else if (users.some(u => u.username.toLowerCase() === fieldData.username.toLowerCase() && u.id !== editingUser?.id)) {
@@ -39,6 +40,11 @@ const ManageUsers: React.FC = () => {
         if (!editingUser && (!fieldData.password || fieldData.password.length < 6)) {
             newErrors.password = 'Password must be at least 6 characters.';
         }
+        
+        if (!fieldData.roleId) {
+            newErrors.roleId = 'A role must be selected.';
+        }
+
         setErrors(newErrors);
         return Object.values(newErrors).every(x => x === '');
     };
@@ -48,12 +54,15 @@ const ManageUsers: React.FC = () => {
         const actions = [
             { text: 'Logged in successfully', type: 'login' as const },
             { text: 'Viewed the Transaction Ledger', type: 'generic' as const },
+            { text: 'Accessed Ticket Sales records', type: 'generic' as const },
             { text: 'Generated an Agent Performance report', type: 'report' as const },
-            { text: 'Attempted to access an unauthorized page', type: 'generic' as const },
+            { text: 'Exported a monthly ledger report', type: 'report' as const },
+            { text: 'Investigated discrepancy DIS-162438', type: 'generic' as const },
+            { text: 'Attempted to access System Settings (unauthorized)', type: 'generic' as const },
             { text: 'Changed password', type: 'password' as const },
             { text: 'Logged out', type: 'logout' as const },
         ];
-        const count = Math.floor(Math.random() * 5) + 3; // 3 to 7 log entries
+        const count = Math.floor(Math.random() * 5) + 4; // 4 to 8 log entries
         for (let i = 0; i < count; i++) {
             const randomAction = actions[Math.floor(Math.random() * actions.length)];
             log.push({
@@ -71,9 +80,9 @@ const ManageUsers: React.FC = () => {
         setFormData({
             username: user.username,
             password: '',
-            role: user.role,
+            roleId: user.roleId,
         });
-        setErrors({ username: '', password: '', form: '' });
+        setErrors({ username: '', password: '', roleId: '', form: '' });
         setActiveTab('details');
         setActivityLog(generateMockActivity(user.id));
         setIsModalOpen(true);
@@ -81,8 +90,9 @@ const ManageUsers: React.FC = () => {
 
     const openModalForAdd = () => {
         setEditingUser(null);
-        setFormData({ username: '', password: '', role: 'Agent' });
-        setErrors({ username: '', password: '', form: '' });
+        const defaultRole = roles.find(r => r.name === 'Agent');
+        setFormData({ username: '', password: '', roleId: defaultRole?.id || '' });
+        setErrors({ username: '', password: '', roleId: '', form: '' });
         setActiveTab('details');
         setIsModalOpen(true);
     };
@@ -95,7 +105,6 @@ const ManageUsers: React.FC = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const newFormData = { ...formData, [e.target.name]: e.target.value };
         setFormData(newFormData);
-        validate(newFormData);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -108,14 +117,12 @@ const ManageUsers: React.FC = () => {
 
         try {
             if (editingUser) {
-                // Edit user
-                updateUser(editingUser.id, { username: formData.username, role: formData.role });
+                updateUser(editingUser.id, { username: formData.username, roleId: formData.roleId });
             } else {
-                // Add user
                 addUser({
                     username: formData.username,
                     password: formData.password,
-                    role: formData.role,
+                    roleId: formData.roleId,
                 });
             }
             closeModal();
@@ -133,12 +140,12 @@ const ManageUsers: React.FC = () => {
             deleteUser(userId);
         }
     };
-    
-    const isFormValid = Object.values(errors).every(x => x === '');
 
     const filteredUsers = users.filter(user =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    
+    const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown Role';
 
     const formatTimeAgo = (timestamp: string) => {
         const seconds = Math.floor((new Date().getTime() - new Date(timestamp).getTime()) / 1000);
@@ -198,17 +205,19 @@ const ManageUsers: React.FC = () => {
                             )}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Role</label>
-                                <select name="role" value={formData.role} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500">
-                                    {(['Administrator', 'Auditor', 'Finance Officer', 'Agent', 'Viewer'] as Role[]).map(role => (
-                                        <option key={role} value={role}>{role}</option>
+                                <select name="roleId" value={formData.roleId} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500">
+                                    <option value="" disabled>Select a role</option>
+                                    {roles.map(role => (
+                                        <option key={role.id} value={role.id}>{role.name}</option>
                                     ))}
                                 </select>
+                                {errors.roleId && <p className="mt-1 text-sm text-red-600">{errors.roleId}</p>}
                             </div>
                         </div>
                         {errors.form && <p className="mt-4 text-sm text-red-600">{errors.form}</p>}
                         <div className="mt-6 flex justify-end space-x-3">
                             <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                            <button type="submit" disabled={!isFormValid} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-primary-300 disabled:cursor-not-allowed">{editingUser ? 'Save Changes' : 'Create User'}</button>
+                            <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-primary-300 disabled:cursor-not-allowed">{editingUser ? 'Save Changes' : 'Create User'}</button>
                         </div>
                     </form>
                 ) : (
@@ -258,13 +267,16 @@ const ManageUsers: React.FC = () => {
                         Add New User
                     </button>
                 </div>
-                <div className="mb-4">
+                <div className="mb-4 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <SearchIcon className="h-5 w-5 text-gray-400" />
+                    </div>
                     <input
                         type="search"
                         placeholder="Search by username..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        className="block w-full max-w-sm pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                     />
                 </div>
                 <div className="overflow-x-auto">
@@ -293,7 +305,7 @@ const ManageUsers: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                                                {user.role}
+                                                {getRoleName(user.roleId)}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
